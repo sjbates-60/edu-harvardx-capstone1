@@ -1,0 +1,203 @@
+---
+title: "Capstone Project 1: Movie Recommendation System"
+author: "Samuel Bates"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Project Goals
+
+- To create a recommendation system using MovieLens data.
+- To train the system on a set of roughly 9 million ratings of movies by people.
+- To predict the ratings for a set of roughly 1 million ratings of movies 
+  by people.
+- To report the accuracy of the system by comparing the prediction to the
+  actual reported ratings.
+
+## Project Deliverables
+- A script in R format that generates the predicted movie 
+  ratings and RMSE score.
+- An R markdown file containing:
+  - A description of the model choices I made;
+  - Portions of the above code used to train the recommendation system.
+  - Portions of the above code used to predict ratings on the validation data.
+  - The RMSE of the prediction.
+- A PDF file generated from the R markdown file described above.
+- **(Recommended)** A link to a Github repository containing the three files
+  described above.
+  
+### R markdown file details
+The report documents the analysis and presents the findings, along with
+supporting statistics and figures. 
+The report should be written assuming that the reader is not familiar
+with the project or the data. The report must include the RMSE generated. The
+report must include at least the following sections:
+
+1. an **introduction/overview/executive summary** section that describes the 
+dataset and summarizes the goal of the project and key steps that were performed
+2. a **methods/analysis** section that explains the process and techniques used,
+including data cleaning, data exploration and visualization, insights gained,
+and the modeling approach
+3. a **results** section that presents the modeling results and 
+discusses the model performance
+4. a **conclusion** section that gives a brief summary of the report, 
+its limitations and future work
+
+### R script details
+The code in the R script should should be well-commented and easy to follow. 
+The code provided in the R script should contain all of the code and comments
+for the project:
+
+- Code to load the data into R for analysis
+- Code to clean/wrangle the data into a form to simplify analysis
+- Code to explore the data (summaries, plots, etc.)
+- Code to calculate portions of the selected model(s)
+- Code to measure the accuracy of the model on the training set
+- Code to predict the results on the test set
+- Code to measure the accuracy of the model on the test set
+- Code to explore features of the data that are not explained by the model
+
+### Notes
+
+#### 3/29/21
+
+Data exploration:
+
+- Only 66 reviews and 12 movies have the IMAX "genre." There are no
+reviews of these movies that do not have IMAX specified, so there is 
+nothing to be gained from this. (Just done by hand-checking 4 of the movies;
+haven't done a full search.)
+- Do clustering on the genres? Might help to reduce the number of variables.
+
+#### 3/30/21
+for
+- Was able to run prcomp() on 100,000 records of 20 genres in about 3 seconds.
+This suggests I will be able to do it on the entire dataset relatively. 
+Question: What does it mean? 
+- Was not able to run dist() on the same dataset; it wanted to allocate a
+vector of size 30.3 Gb.
+
+#### 3/31/21
+
+- Spent most of the day figuring out how to load the full 10 million records
+into RStudio. Eventually figured out that I should break the genres out after
+partitioning the data rather than before.
+
+#### 4/1/21
+
+- Ran both k-fold cross validation and bootstrap trainings on the first
+1 million records. The RMSE I got in both cases was over 1.7, suggesting that
+a linear model is not a good choice.
+  - Not true after all. It turns out I had converted the rating variable into
+  a factor when reading it in. Once I fixed that, I got an RMSE of .821 for
+  k-fold cv and .831 for bootstrap (running on 100,000 records).
+  - Try again with 1 million records: .854 for k-fold ($\lambda$ = 3.2) and 
+  .855 ($\lambda$ = 6.025) for bootstrap.
+- Problem: I ran into memory errors trying to do k-fold cross validation
+on the full 10 million records.
+- Here's an interesting result. I fit a linear model to the first 5 million
+records with $\lambda$ = 3, and got an RMSE of .854. That's a lower value than
+the value for full points on the assignment (.8649). That doesn't seem right,
+as then I could stop with just a linear fit. Of course, I haven't checked
+it on the validation set yet, but it still seems peculiar.
+  - Maybe I calculated RMSE incorrectly? It doesn't look like it.
+- I tested $\lambda$ = 3.2 on the 1 million record test set and got an RMSE 
+of .866, so there is obviously still room for improvement.
+
+New idea: Do k-fold cross validation with a larger percentage of the
+records in the test set. If I can run `lm_rmse` on 7 million records, I can 
+put 3 million records in the test. I might have to construct the sets by hand.
+
+  - Load all 10 million records
+  - Write code to separate them into 10 different 7/3 sets, storing
+  each pair in a separate .Rdata file
+  - Write custom cross validation code that loads each pair and calculates
+  the RMSE.
+    - Will need to delete each pair after the calculation due to memory
+    limitations.
+    
+#### 4/2/21
+
+Thought of a problem with my work last night after I went to bed: I had
+separated the genres into separate columns before doing k-fold cv. This 
+morning I loaded just the ratings, and was able to run lm_rmse on the entire
+set of 9 million ratings. Most of a week wasted! So the algorithm should be
+
+- Load the ratings and separate into edx and validation.
+- Do 10-fold cross validation on edx to get the best tuning paramter $\lambda$.
+- Construct $\mu , b_i , b_u$ from the entire edx set.
+  - Pull construction of these out of __lm_rmse__ into a new function.
+- Subtract the linear model's predictions from edx's ratings to get
+the residual values.
+- Separate the genres variable into separate columns and join with edx
+and validation.
+- Do the next analysis, which is either principal component analysis or
+singular value decomposition.
+
+I spent some time reading through questions that other class members have
+posted, and discovered that several people are approaching the genres
+effects in a different way: they create a duplicate rating for each genre
+of a particular movie. Thus the (user 1, movie 1, rating 5, genre Comedy|Drama)
+record is replaced by 2 records:
+
+- (user 1, movie 1, rating 5, genre Comedy)
+- (user 1, movie 1, rating 5, genre Drama)
+
+I think this is a better approach than mine because it keeps the number
+of variables per observation the same instead of increasing it by a large
+number. It also allows me to try a linear model on genre in the same way
+that I do a linear model on movie and user.
+
+#### 4/3/21
+
+Thoughts about the genre approach mentioned yesterday:
+
+- It does not affect the movie effects, since every user's rating for a movie
+is merely multiplied by the number of genres.
+- It *does* affect the user effects, as different movies rated by a user will
+be multiplied by different numbers.
+
+Did some more exploring of the ratings data. Discovered that it is ordered by
+userId. This means that my analyses using the first 100,000 or million or 5
+million records are probably not representative of the full range of ratings.
+Wrote a small piece of code (randomize_edx.R) to mix them up by taking every
+10th rating starting with 1, followed by every 10th rating starting with 2, etc. 
+Verified that this mixes them well, as the first million ratings now includes
+all users and 90% of the movies.
+
+I have been focusing only on linear models so far, because they are the easiest.
+I should think about the other approaches as well.
+
+- Nearest neighbors: How do I define the distance between ratings? One thought
+is with the "distance" between genres, using the 20-dimensional vectors I
+first constructed. This seems muddled, as the distance between Action and Thriller
+would be the same as the distance between Action and Comedy.
+- Random forest: ???
+- Matrix factorization: This would require filling out the (user, movie) matrix,
+which is very sparse (total dataset has ~1.3% of the entries).
+
+Wrote code to create separate records for each genre in a movie rating. Ran it
+on 100,000 records (took about an hour) and then did a linear model using 
+regularized movie and genre effects. The resulting RMSE was .918 with 
+$\lambda$ = 0.75.
+
+#### 4/5/21
+
+Added 200,000 more records to the 1-record-per-genre dataset amd ran the linear
+model again. The resulting RMSE was .933, worse than it was for 100,000 records!
+Not a good avenu of exploration, it seems.
+
+#### 4/7/21
+
+Experiment: Load data and show some result in report.
+
+```{r eval=TRUE, echo=FALSE}
+load("ml-10M100K/movielens.RData")
+paste("Training set has", nrow(edx), "observations.")
+```
+
+Did it work? Yes, it did.
+
