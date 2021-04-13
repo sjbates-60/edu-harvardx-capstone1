@@ -1,0 +1,96 @@
+---
+title: "Creating a Movie Recommendation System"
+subtitle: "Report for HarvardX PH125.9x: Data Science: Capstone"
+author: "Samuel Bates"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+require(tidyverse)
+require(gridExtra)
+
+load('ml-10M100K/movielens_report.RData')
+```
+
+# Overview
+
+In this report, I describe an exploration of a dataset of movie ratings made by many
+people over the course of several years, and the construction of a model for
+predicting ratings for specific movies by specific people. To test the model,
+I have kept 10% of the ratings out of the model construction. These ratings
+will be used to determine how well the model predicts ratings.
+
+# Exploration
+
+The dataset contains 10,000,054 ratings of movies by people (hereinafter referred
+to as *users*). There are 10,677
+different movies rated and 69,878 different users. The ratings were taken
+between January 9, 1995 and January 5, 2009.
+The dataset is provided as two files, each containing a table:
+
+- `ratings.dat`, containing 10,000,054 observations, each with 4 variables:
+`userId`, `movieId`, `rating` (a number between 0 and 5), and `timestamp`;
+- `movies.dat`, containing 10,681 observations, each with 3 variables: `movieId`,
+`title` (which contains the title and year released), and `genres` (which
+contains a list of genres separated by `|` symbols).
+
+Tables 1 and 2 show the results of counting how many movies each user rated.
+Half of all users rated 69 or fewer movies, and 9 out of 10 rated 335 or
+fewer movies. Only about 1% of the users rated more than 1000 movies.
+
+```{r user-stats, echo=FALSE}
+percents <- ratings %>% 
+  group_by(userId) %>% 
+  summarize(num_ratings = n()) %>% 
+  pull(num_ratings) %>%
+  quantile(probs = seq(0, 1, .1))
+knitr::kable(t(percents), 
+             caption = "Number of movies rated by users")
+
+high_percents <- ratings %>% 
+  group_by(userId) %>% 
+  summarize(num_ratings = n()) %>% 
+  pull(num_ratings) %>%
+  quantile(probs = seq(.9, 1, .01))
+knitr::kable(t(high_percents), 
+             caption = "Number of movies rated by high-volume users")
+rm(percents, high_percents)
+```
+
+
+# Methods and Analysis
+
+A model for predicting ratings must be naturally based on which user 
+is rating the movie
+and which movie is being rated. Figures 1 and 2 show this.
+
+```{r user-movie-correlation, echo=FALSE, fig.height=3}
+movie_stats <- ratings %>% group_by(movieId)
+
+mean_movie_ratings <- movie_stats %>%
+  summarize(num_ratings = n(), mean_rating = mean(rating))
+
+# TODO: Add axis labels and title. Include corrrelation value in title.
+movie_effect <- mean_movie_ratings %>%
+  ggplot(aes(num_ratings, mean_rating)) + geom_point() + scale_x_log10()
+
+user_stats <- ratings %>% group_by(userId)
+
+mean_user_ratings <- user_stats %>%
+  summarize(num_ratings = n(), mean_rating = mean(rating))
+
+# TODO: Add axis labels and title. Include corrrelation value in title.
+user_effect <- mean_user_ratings %>%
+  ggplot(aes(num_ratings, mean_rating)) + geom_point() + scale_x_log10()
+
+grid.arrange(movie_effect, user_effect, ncol = 2)
+rm(mean_movie_ratings, movie_effect, mean_user_ratings, user_effect)
+```
+# Results
+
+
+
+# Conclusion
+
