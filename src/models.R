@@ -96,6 +96,39 @@ linear_movie_user_year_model <- list(
   }
 )
 
+linear_movie_user_timelag_model <- list(
+  name = "Regularized Movie + User + Timelag Effects",
+  train = function(dataset, lambda) {
+    mu <- mean(dataset$rating)
+    
+    b_i <- dataset %>%
+      group_by(movieId) %>%
+      summarize(b_i = sum(rating - mu) / (n() + lambda))
+    
+    b_u <- dataset %>%
+      left_join(b_i, by = "movieId") %>%
+      group_by(userId) %>%
+      summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
+    
+    b_t <- dataset %>%
+      left_join(b_i, by = "movieId") %>%
+      left_join(b_u, by = "userId") %>%
+      group_by(timelag) %>%
+      summarize(b_t = sum(rating - b_u - b_i - mu) / (n() + lambda))
+    
+    predictfn = function(dataset) {
+      predicted_ratings <- dataset %>%
+        left_join(b_i, by = "movieId") %>%
+        left_join(b_u, by = "userId") %>%
+        left_join(b_t, by = "timelag") %>%
+        mutate(pred = mu + b_i + b_u + b_t) %>%
+        pull(pred)
+      return(predicted_ratings)
+    }
+    return(list(predict = predictfn))
+  }
+)
+
 linear_movie_user_genres_model <- list(
   name = "Regularized Movie + User + Genres Effects",
   train = function(dataset, lambda) {
