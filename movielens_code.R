@@ -1,22 +1,24 @@
+# Outline -----------------------------------------------------------------
+# Author: Samuel Bates
+
 require(tidyverse)
 require(caret)
 require(data.table)
 require(lubridate)
 
 options(digits = 5)
+
+## Logging ----------------------------------------------------------------
 source("src/logfile.R", echo = FALSE)
+
+## Models to test ---------------------------------------------------------
 source("src/models.R", echo = FALSE)
 
-##############################################################################
-##############################################################################
-#
-# MAIN PROGRAM STARTS HERE
-#
-##############################################################################
-##############################################################################
 
-##############################################################################
-# Data loading
+# Main Program ------------------------------------------------------------
+
+
+## Load data --------------------------------------------------------------
 log_start()
 
 log_info("Loading data...")
@@ -52,7 +54,6 @@ log_info("Training data created.")
 log_info(paste("Training set:", nrow(edx), "observations.",
                 "Test set:", nrow(validation), "observations."))
 
-##############################################################################
 # Add movie data to training and test sets.
 
 log_info("Adding movie data...")
@@ -85,28 +86,32 @@ all_genres <- unique(unlist(sapply(movies$genres,
 edx <- left_join(edx, movies, by = "movieId")
 validation <- left_join(validation, movies, by = "movieId")
 
-edx <- edx %>% mutate(timelag = year(timestamp) - year)
-validation <- validation %>% mutate(timelag = year(timestamp) - year)
+# Add a variable for how old the movie was when the rating was done.
+fractional_year <- function(ts) year(ts) + month(ts) / 13
+edx <- edx %>% 
+  mutate(age = fractional_year(timestamp) - year)
+validation <- validation %>% 
+  mutate(age = fractional_year(timestamp) - year)
 
-remove(title_year, movies)
+remove(title_year, movies, fractional_year)
 
 log_info("Movie data added to training and test sets.")
 
 # Save checkpoint data (don't save logging objects).
-save(file = 'ml-10M100K/cp01.RData',
+save(file = "ml-10M100K/cp01.RData",
      list = setdiff(ls(), ls(pattern = ".*log")))
 
 
-##############################################################################
+## Train with cross-validation ---------------------------------------------
 # Try a few linear models, using 5-fold cross validation on each one.
 #
 suppressWarnings(set.seed(10, sample.kind = "Rounding"))
 kfold_sets <- createFolds(edx$rating, k = 5)
 
-models <- list(linear_movie_user_model, 
-               linear_movie_user_year_model, 
-               linear_movie_user_timelag_model,
-               linear_movie_user_genres_model)
+models <- list(model_reg_movie_user, 
+               model_reg_movie_user_year, 
+               model_age_reg_movie_user,
+               model_reg_movie_user_age)
 
 # For each model:
 model_results <- map_dfr(models, function(model) {
@@ -160,10 +165,10 @@ linear_model_predictions <- chosen_linear_model$fit$predict(edx)
 remove(model_results, model_index)
 
 # Save checkpoint data (don't save logging objects).
-save(file = 'ml-10M100K/cp02.RData',
+save(file = "ml-10M100K/cp02.RData",
      list = setdiff(ls(), ls(pattern = ".*log")))
 
-##############################################################################
+## Create genre model ------------------------------------------------------
 # Add individual genre variables to the training and validation sets.
 #
 log_info("Adding individual genre variables to training and validation sets.")
@@ -208,7 +213,7 @@ genre_predictfn <- function(dataset) {
   # way of creating 900 groups of indices.
   # https://stackoverflow.com/questions/3318333/split-a-vector-into-chunks
   groups <- split(seq_len(nrow(dataset)), sort(seq_len(nrow(dataset)) %% 900))
-  
+
   res <- lapply(groups, function(g) {
     if (first(g) %% 500000 < 1000) 
       log_info(paste("Processing records up to", last(g)))
@@ -230,10 +235,10 @@ genre_predictfn <- function(dataset) {
 }
 
 # Save checkpoint data (don't save logging objects).
-save(file = 'ml-10M100K/cp03.RData',
+save(file = "ml-10M100K/cp03.RData",
      list = setdiff(ls(), ls(pattern = ".*log")))
 
-##############################################################################
+## Test genre model -------------------------------------------------------
 # Check results of combining linear and genre models on the training set.
 #
 log_info("Checking the result of linear and genre models together.")
@@ -246,9 +251,7 @@ log_info(paste("Combined models: RMSE =", combined_rmse))
 
 remove(edx_residuals)
 
-##############################################################################
-##############################################################################
-# FINAL CHECK
+## Final Check ------------------------------------------------------------
 #
 # Test the model on the validation set.
 #
@@ -257,7 +260,7 @@ validation_residuals <- validation %>%
   mutate(rating = rating - validation_linear_predictions)
 
 # Save checkpoint data (don't save logging objects).
-save(file = 'ml-10M100K/cp04.RData',
+save(file = "ml-10M100K/cp04.RData",
      list = setdiff(ls(), ls(pattern = ".*log")))
 
 validation_predictions <- validation_linear_predictions +
