@@ -3,45 +3,48 @@ title: "Creating a Movie Recommendation System"
 subtitle: "Report for HarvardX PH125.9x: Data Science: Capstone"
 author: "Samuel Bates"
 output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: 80
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 
 require(tidyverse)
 require(gridExtra)
+require(lubridate)
 
-load('ml-10M100K/movielens_report.RData')
+load("ml-10M100K/movielens_report.RData")
 ```
 
 # Overview
 
-In this report, I describe an exploration of a dataset of movie ratings made by many
-people over the course of several years, and the construction of a model for
-predicting ratings for specific movies by specific people. To test the model,
-I have kept 10% of the ratings out of the model construction. These ratings
-will be used to determine how well the model predicts ratings.
+In this report, I describe an exploration of a dataset of movie ratings made by
+many people over the course of several years, and the construction of a model
+for predicting ratings for specific movies by specific people. To test the
+model, I have kept 10% of the ratings out of the model construction. These
+ratings will be used to determine how well the model predicts ratings.
 
 # Exploration
 
-The dataset contains 10,000,054 ratings of movies by people (hereinafter referred
-to as *users*). There are 10,677
-different movies rated and 69,878 different users. The ratings were taken
-between January 9, 1995 and January 5, 2009.
-The dataset is provided as two files, each containing a table:
+The dataset contains 10,000,054 ratings of movies by people (hereinafter
+referred to as *users*). There are 10,677 different movies rated and 69,878
+different users. The ratings were taken between January 9, 1995 and January 5,
+2009. The dataset is provided as two files:
 
-- `ratings.dat`, containing 10,000,054 observations, each with 4 variables:
-`userId`, `movieId`, `rating` (a number between 0 and 5), and `timestamp`;
-- `movies.dat`, containing 10,681 observations, each with 3 variables: `movieId`,
-`title` (which contains the title and year released), and `genres` (which
-contains a list of genres separated by `|` symbols).
+-   `ratings.dat`, containing 10,000,054 observations, each with 4 variables:
+    `userId`, `movieId`, `rating` (a number between 0 and 5), and `timestamp`;
+-   `movies.dat`, containing 10,681 observations, each with 3 variables:
+    `movieId`, `title` (which contains the title and year released), and
+    `genres` (which contains a list of genres separated by `|` symbols).
 
 Tables 1 and 2 show the results of counting how many movies each user rated.
-Half of all users rated 69 or fewer movies, and 9 out of 10 rated 335 or
-fewer movies. Only about 1% of the users rated more than 1000 movies.
+Half of all users rated 69 or fewer movies, and 9 out of 10 rated 335 or fewer
+movies. Only about 1% of the users rated more than 1000 movies.
 
-```{r user-stats, echo=FALSE}
-percents <- ratings %>% 
+```{r user-stats}
+percents <- ratings %>%
   group_by(userId) %>% 
   summarize(num_ratings = n()) %>% 
   pull(num_ratings) %>%
@@ -59,38 +62,96 @@ knitr::kable(t(high_percents),
 rm(percents, high_percents)
 ```
 
+Figures 1 and 2 support the unsurprising results that a a movie's rating depends
+on which user is rating the movie and which movie is being rated.
 
-# Methods and Analysis
-
-A model for predicting ratings must be naturally based on which user 
-is rating the movie
-and which movie is being rated. Figures 1 and 2 show this.
-
-```{r user-movie-correlation, echo=FALSE, fig.height=3}
+```{r user-movie-correlation, fig.height=4.5}
 movie_stats <- ratings %>% group_by(movieId)
 
 mean_movie_ratings <- movie_stats %>%
   summarize(num_ratings = n(), mean_rating = mean(rating))
 
-# TODO: Add axis labels and title. Include corrrelation value in title.
+movie_cor <- cor(mean_movie_ratings$num_ratings, 
+                 mean_movie_ratings$mean_rating)
+movie_caption <-  sprintf("Figure 1. A movie's average rating increases as the number of ratings increases (correlation is %.4f).", movie_cor)
+
 movie_effect <- mean_movie_ratings %>%
-  ggplot(aes(num_ratings, mean_rating)) + geom_point() + scale_x_log10()
+  ggplot(aes(num_ratings, mean_rating)) + 
+  geom_point(alpha = 0.2) + 
+  scale_x_log10() + 
+  xlab("Number of ratings per movie (log scale)") +
+  ylab("Rating") +
+  labs(caption = movie_caption)
 
 user_stats <- ratings %>% group_by(userId)
 
 mean_user_ratings <- user_stats %>%
   summarize(num_ratings = n(), mean_rating = mean(rating))
 
-# TODO: Add axis labels and title. Include corrrelation value in title.
-user_effect <- mean_user_ratings %>%
-  ggplot(aes(num_ratings, mean_rating)) + geom_point() + scale_x_log10()
+user_cor <- cor(mean_user_ratings$num_ratings, mean_user_ratings$mean_rating)
+user_caption <-  sprintf("Figure 2. A user's average movie rating decreases as the number of movies rated increases (correlation is %.4f).", user_cor)
 
-grid.arrange(movie_effect, user_effect, ncol = 2)
-rm(mean_movie_ratings, movie_effect, mean_user_ratings, user_effect)
+user_effect <- mean_user_ratings %>%
+  ggplot(aes(num_ratings, mean_rating)) + 
+  geom_point(alpha = 0.2) + 
+  scale_x_log10() +
+  xlab("Number of movies rated by user (log scale)") +
+  ylab("Rating") +
+  labs(caption = user_caption)
+
+grid.arrange(movie_effect, user_effect, nrow = 2)
+
+rm(movie_caption, movie_effect, movie_cor, movie_stats,
+   user_caption, user_effect, user_cor, user_stats)
 ```
+
+A movie's ratings may also change over time. Figure 3 shows how the average
+rating per month of the movie "Jerry Maguire" decreases over the 14 years after
+it was released.
+
+```{r rating-vs-time, fig.height=2, fig.cap="A movie's rating can change over time."}
+ratings %>% 
+  filter(movieId == 1393) %>%
+  mutate(delay = year(timestamp) - 1996 + month(timestamp) / 13) %>%
+  group_by(delay) %>%
+  summarize(rating = mean(rating)) %>%
+  ggplot(aes(delay, rating)) +
+  geom_point(color = "blue") +
+  ylim(0, 5) +
+  xlab("Number of years after movie release") +
+  ylab("Average rating") +
+  labs(title = "Jerry Maguire")
+```
+
+# Methods and Analysis
+
+## Data Wrangling
+
+The `movie.dat` table has two variables that were pulled apart in order to
+facilitate analysis.
+
+-   The release year is contained in the `title` variable. This was separated
+    into a new `year` variable in order to model the effect of time on ratings.
+
+-   The `genres` field is a list of `|`-separated genres. There are 19 different
+    genres, plus a "(no genre specified)" option. These are separated into 20
+    variables, each named for a genre. To make a more compact display, I
+    abbreviated each genre to two characters. A genre variable contains a 1 if
+    the movie has the variable name in its `genres` variable, and a 0 otherwise.
+
+The `ratings.dat` table has a `timestamp` variable that is a second count from
+the epoch. I converted it into a `POSIXct` variable so that the time between a
+movie's release year and a rating's creation time can be calculated.
+
+## Models
+
+Let $M$ be the set of movies, $U$ the set of users, and $G$ the set of genres.
+
+$$
+Y = \mu + b_m + b_u + \sum_{g \in G}b_{m,u,g} + \epsilon_{m,u} ,
+\forall m \in M, \forall u \in U
+$$
+
 # Results
 
-
-
 # Conclusion
-
