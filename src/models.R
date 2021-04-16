@@ -4,7 +4,8 @@
 #   dataset    - A set of movie ratings.
 #   test_index - An index of rows for the test set.
 # Returns:
-#   A list of two elements: train and test.
+#   A list of two sets: train and test. Every rating in
+#     dataset is in only one set.
 #
 get_training_and_test <- function(dataset, test_index) {
   train <- dataset[-test_index, ]
@@ -37,21 +38,22 @@ get_training_and_test <- function(dataset, test_index) {
 # and returns a list containing a predict() function to run
 # on a dataset.
 #
-linear_movie_user_model <- list(
-  name = "Regularized Movie + User Effects",
+
+model_reg_movie_user <- list(
+  name = "Regularized(Movie + User) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
-    
+
     b_i <- dataset %>%
       group_by(movieId) %>%
       summarize(b_i = sum(rating - mu) / (n() + lambda))
-    
+
     b_u <- dataset %>%
       left_join(b_i, by = "movieId") %>%
       group_by(userId) %>%
       summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
-    
-    predictfn = function(dataset) {
+
+    predictfn <- function(dataset) {
       predicted_ratings <- dataset %>%
         left_join(b_i, by = "movieId") %>%
         left_join(b_u, by = "userId") %>%
@@ -63,27 +65,27 @@ linear_movie_user_model <- list(
   }
 )
 
-linear_movie_user_year_model <- list(
-  name = "Regularized Movie + User + Year Effects",
+model_reg_movie_user_year <- list(
+  name = "Regularized(Movie + User + Year) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
-    
+
     b_i <- dataset %>%
       group_by(movieId) %>%
       summarize(b_i = sum(rating - mu) / (n() + lambda))
-    
+
     b_u <- dataset %>%
       left_join(b_i, by = "movieId") %>%
       group_by(userId) %>%
       summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
-    
+
     b_y <- dataset %>%
       left_join(b_i, by = "movieId") %>%
       left_join(b_u, by = "userId") %>%
       group_by(year) %>%
       summarize(b_y = sum(rating - b_u - b_i - mu) / (n() + lambda))
-    
-    predictfn = function(dataset) {
+
+    predictfn <- function(dataset) {
       predicted_ratings <- dataset %>%
         left_join(b_i, by = "movieId") %>%
         left_join(b_u, by = "userId") %>%
@@ -96,32 +98,32 @@ linear_movie_user_year_model <- list(
   }
 )
 
-linear_movie_user_timelag_model <- list(
-  name = "Regularized Movie + User + Timelag Effects",
+model_age_reg_movie_user <- list(
+  name = "Age + Regularized(Movie + User) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
-    
+
     b_i <- dataset %>%
       group_by(movieId) %>%
       summarize(b_i = sum(rating - mu) / (n() + lambda))
-    
+
     b_u <- dataset %>%
       left_join(b_i, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
-    
-    b_t <- dataset %>%
+      summarize(b_u = mean(rating - b_i - mu))
+
+    b_a <- dataset %>%
       left_join(b_i, by = "movieId") %>%
       left_join(b_u, by = "userId") %>%
-      group_by(timelag) %>%
-      summarize(b_t = sum(rating - b_u - b_i - mu) / (n() + lambda))
-    
-    predictfn = function(dataset) {
+      group_by(age) %>%
+      summarize(b_a = sum(rating - b_u - b_i - mu) / (n() + lambda))
+
+    predictfn <- function(dataset) {
       predicted_ratings <- dataset %>%
         left_join(b_i, by = "movieId") %>%
         left_join(b_u, by = "userId") %>%
-        left_join(b_t, by = "timelag") %>%
-        mutate(pred = mu + b_i + b_u + b_t) %>%
+        left_join(b_a, by = "age") %>%
+        mutate(pred = mu + b_i + b_u + b_a) %>%
         pull(pred)
       return(predicted_ratings)
     }
@@ -129,32 +131,32 @@ linear_movie_user_timelag_model <- list(
   }
 )
 
-linear_movie_user_genres_model <- list(
-  name = "Regularized Movie + User + Genres Effects",
+model_reg_movie_user_age <- list(
+  name = "Regularized(Movie + User + Age) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
-    
+
     b_i <- dataset %>%
       group_by(movieId) %>%
       summarize(b_i = sum(rating - mu) / (n() + lambda))
-    
+
     b_u <- dataset %>%
       left_join(b_i, by = "movieId") %>%
       group_by(userId) %>%
       summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
-    
-    b_g <- dataset %>%
+
+    b_a <- dataset %>%
       left_join(b_i, by = "movieId") %>%
       left_join(b_u, by = "userId") %>%
-      group_by(genres) %>%
-      summarize(b_g = sum(rating - b_u - b_i - mu) / (n() + lambda))
-    
-    predictfn = function(dataset) {
+      group_by(age) %>%
+      summarize(b_a = sum(rating - b_u - b_i - mu) / (n() + lambda))
+
+    predictfn <- function(dataset) {
       predicted_ratings <- dataset %>%
         left_join(b_i, by = "movieId") %>%
         left_join(b_u, by = "userId") %>%
-        left_join(b_g, by = "genres") %>%
-        mutate(pred = mu + b_i + b_u + b_g) %>%
+        left_join(b_a, by = "age") %>%
+        mutate(pred = mu + b_i + b_u + b_a) %>%
         pull(pred)
       return(predicted_ratings)
     }
