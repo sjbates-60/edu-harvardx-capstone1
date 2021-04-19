@@ -3,6 +3,7 @@ title: "Creating a Movie Recommendation System"
 subtitle: "Report for HarvardX PH125.9x: Data Science: Capstone"
 author: "Samuel Bates"
 output: pdf_document
+geometry: margin=1.1in
 editor_options: 
   markdown: 
     wrap: 80
@@ -10,6 +11,7 @@ editor_options:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_knit$set(eval.after = "fig.cap")
 
 require(tidyverse)
 require(gridExtra)
@@ -20,11 +22,11 @@ load("ml-10M100K/movielens_report.RData")
 
 # Overview
 
-In this report, I describe an exploration of a dataset of movie ratings made by
-many people over the course of several years, and the construction of a model
-for predicting ratings for specific movies by specific people. To test the
-model, I have kept 10% of the ratings out of the model construction. These
-ratings will be used to determine how well the model predicts ratings.
+In this report, I describe my exploration of a dataset of movie ratings made by
+many people over the course of several years, and my construction of a model for
+predicting ratings for specific movies by specific people. To test the model, I
+kept 10% of the ratings out of the model construction. These ratings were then
+used to determine the accuracy of the model.
 
 # Exploration
 
@@ -62,10 +64,10 @@ knitr::kable(t(high_percents),
 rm(percents, high_percents)
 ```
 
-Figures 1 and 2 support the unsurprising results that a a movie's rating depends
+Figures 1 and 2 support the unsurprising results that a movie's rating depends
 on which user is rating the movie and which movie is being rated.
 
-```{r user-movie-correlation, fig.height=4.5}
+```{r movie-correlation, fig.height=1.8, fig.cap=movie_caption}
 movie_stats <- ratings %>% group_by(movieId)
 
 mean_movie_ratings <- movie_stats %>%
@@ -73,50 +75,49 @@ mean_movie_ratings <- movie_stats %>%
 
 movie_cor <- cor(mean_movie_ratings$num_ratings, 
                  mean_movie_ratings$mean_rating)
-movie_caption <-  sprintf("Figure 1. A movie's average rating increases as the number of ratings increases (correlation is %.4f).", movie_cor)
+movie_caption <-  sprintf("A movie's average rating increases as the number of ratings increases (correlation is %.4f).", movie_cor)
 
-movie_effect <- mean_movie_ratings %>%
+rm(movie_stats, movie_cor)
+
+mean_movie_ratings %>%
   ggplot(aes(num_ratings, mean_rating)) + 
   geom_point(alpha = 0.2) + 
   scale_x_log10() + 
   xlab("Number of ratings per movie (log scale)") +
-  ylab("Rating") +
-  labs(caption = movie_caption)
+  ylab("Rating")
+```
 
+```{r user-correlation, fig.height=1,8, fig.cap=user_caption}
 user_stats <- ratings %>% group_by(userId)
 
 mean_user_ratings <- user_stats %>%
   summarize(num_ratings = n(), mean_rating = mean(rating))
 
 user_cor <- cor(mean_user_ratings$num_ratings, mean_user_ratings$mean_rating)
-user_caption <-  sprintf("Figure 2. A user's average movie rating decreases as the number of movies rated increases (correlation is %.4f).", user_cor)
+user_caption <-  sprintf("A user's average movie rating decreases as the number of movies rated increases (correlation is %.4f).", user_cor)
 
-user_effect <- mean_user_ratings %>%
+rm(user_stats, user_cor)
+
+mean_user_ratings %>%
   ggplot(aes(num_ratings, mean_rating)) + 
   geom_point(alpha = 0.2) + 
   scale_x_log10() +
   xlab("Number of movies rated by user (log scale)") +
-  ylab("Rating") +
-  labs(caption = user_caption)
-
-grid.arrange(movie_effect, user_effect, nrow = 2)
-
-rm(movie_caption, movie_effect, movie_cor, movie_stats,
-   user_caption, user_effect, user_cor, user_stats)
+  ylab("Rating")
 ```
 
 A movie's ratings may also change over time. Figure 3 shows how the average
 rating per month of the movie "Jerry Maguire" decreases over the 14 years after
 it was released.
 
-```{r rating-vs-time, fig.height=2, fig.cap="A movie's rating can change over time."}
+```{r rating-vs-time, fig.height=1.8, fig.cap="A movie's rating can change over tim."}
 ratings %>% 
   filter(movieId == 1393) %>%
   mutate(delay = year(timestamp) - 1996 + month(timestamp) / 13) %>%
   group_by(delay) %>%
   summarize(rating = mean(rating)) %>%
   ggplot(aes(delay, rating)) +
-  geom_point(color = "blue") +
+  geom_point() +
   ylim(0, 5) +
   xlab("Number of years after movie release") +
   ylab("Average rating") +
@@ -143,15 +144,125 @@ The `ratings.dat` table has a `timestamp` variable that is a second count from
 the epoch. I converted it into a `POSIXct` variable so that the time between a
 movie's release year and a rating's creation time can be calculated.
 
+I created a training set containing 9,000,055 ratings and a validation set
+containing 999,999 ratings. All exploration and modelling was done exclusively
+on the training set.
+
 ## Models
 
-Let $M$ be the set of movies, $U$ the set of users, and $G$ the set of genres.
+My exploration was done in two phases. The first phase was to explore a linear
+combination of the non-genre variables. These variables are `userId`, `movieId`,
+`year`, and `timestamp`.[^1] Additionally, I calculated an age variable. The age
+is a measure of how old the movie was when the user rated it. I calculated it as
+`year(timestamp) + month(timestamp) / 13 - year`.[^2] Furthermore, I added
+regularization to the models to reduce the effect of movies with few ratings.
+Using these variables, I tested four models:
+
+[^1]: I left out `title` as I could not think of a useful distance function
+    between titles.
+
+[^2]: The division is by 13 instead of 12 so as to make December of one year
+    distinct from January of the next year.
+
+-   Regularized movie and user biases;
+
+-   Regularized movie, user, and year biases;
+
+-   Regularized movie and user biases and a nonregularized age bias;
+
+-   Regularized movie, year, and age biases.
+
+For each model, I calculated an optimal tuning parameter for the regularization
+and then averaged the results from 5-fold cross validation of the training set.
+I then chose the model that resulted in the lowest RMSE on the entire training
+set.
+
+The second phase was to explore the effects of genre after removing the estimate
+from the first phase. Again, I chose a linear combination of genre variables as
+the model. To get the genre variables, I separated the `genres` variable into 20
+separate variables, one for each of the genres in Table 3. For display purposes,
+I abbreviated each genre to two characters. Each genre variable has a value of 1
+if the genre appears in the movie's `genres` variable and has a value of 0
+otherwise.
+
+```{r genres-table}
+all_genres <- unique(unlist(sapply(movies$genres,
+                                   function(g) strsplit(g, "\\|"))))
+abbrevs <- data.frame(genres = all_genres) %>%
+  mutate(genres = gsub("([^\\|]{2})[^\\|]+", "\\1", genres)) %>%
+  mutate(genres = sub("Sc", "SF", genres)) %>%
+  mutate(genres = sub("Fi", "FN", genres)) %>%
+  mutate(genres = sub("\\(n", "No", genres))
+
+summary <- data.frame(all_genres[1:5], abbrevs[1:5, 1],
+                      all_genres[6:10], abbrevs[6:10, 1],
+                      all_genres[11:15], abbrevs[11:15, 1],
+                      all_genres[16:20], abbrevs[16:20, 1])
+knitr::kable(summary, col.names = c("Genre", "Abbr.",
+                                "Genre", "Abbr.",
+                                "Genre", "Abbr.",
+                                "Genre", "Abbr."),
+             caption = "The twenty genres used to describe movies and their abbreviations.")
+
+```
+
+Mathematically, the model can be written as
 
 $$
-Y = \mu + b_m + b_u + \sum_{g \in G}b_{m,u,g} + \epsilon_{m,u} ,
-\forall m \in M, \forall u \in U
+\hat{Y}_{m,u} = \sum_{g = 1}^{20}x_m^g b_g^u
 $$
+
+where $m$ is a movie, $u$ is a user, and $x_m^g$ is the genre variable described
+above. The exploration then becomes a calculation of the term $b_g^u$, the bias
+that user $u$ has for genre $g$, for each user and genre.
+
+I calculated the terms in two steps:
+
+1.  For each rating in the training set, I gave equal fractions of it to each of
+    the movie's genres. Thus, if a movie with genres {Ad, Co, Ro} received a
+    rating of 4.5, I assigned a rating of 1.5 to each of the three genres.
+
+2.  For each user, I gathered the fractional ratings calculated in Step 1 and
+    computed the average within each genre.
+
+The result is a matrix with 69,878 rows and 20 columns: 1 row for each user and
+1 column for each genre. The rating for a movie is then computed by summing the
+values in a row that correspond to the movie's genres.
+
+To compute $\hat{Y}_{m,u}$ efficiently, I note that the sum above can be
+rewritten as the dot product of the vectors $(x_m^1, …, x_m^{20})$ and
+$(b_1^u , … , b_{20}^u )$. The first vector is the genre categorization of movie
+$m$ and the second vector is the row of the above matrix for user $u$.
+Therefore, multiple ratings can be calculated by computing the product of two
+matrices:
+
+-   Define $M$ to be a matrix containing the movies to be rated, each row
+    consisting of 0's and 1's depending on the movie's genre categorization.
+
+-   Define $U$ to be a matrix containing the rows of the users whose ratings are
+    to be calculated.
+
+-   The product $U$ $\cdot$ $M^\intercal$ has the desired ratings on the
+    diagonal.
+
+This is essential for timely calculation of ratings, since R provides matrix
+algebra that is much faster than multiplying two vectors and summing the result.
+I wrote code that calculates roughly 10,000 ratings at a time. Despite this
+optimization, the calculation of 9 million ratings took roughly 80 minutes. For
+this reason, I did not use cross validation or regularization when buidling the
+genre model.
 
 # Results
+
+The models using only non-genre variables all returned very similar results, as
+shown in Table 4. Including the age of the movie yielded a slight improvement of
+roughly 1%. In contrast, including the genre variables led to an improvement of
+over 5%.
+
+```{r model-results}
+knitr::kable(model_results,
+             digits = 5,
+             col.names = c("Model name", "$\\lambda$", "RMSE"))
+```
 
 # Conclusion
