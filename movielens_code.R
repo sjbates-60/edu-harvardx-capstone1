@@ -30,7 +30,7 @@ ratings <- as.data.table(ratings) %>%
   mutate(userId = as.numeric(userId),
          movieId = as.numeric(movieId),
          rating = as.numeric(rating),
-         timestamp = as.POSIXct(timestamp,
+         timestamp = as.POSIXct(as.numeric(timestamp),
                                 tz = "UTC",
                                 origin = "1970-01-01 00:00.00 UTC"))
 remove(records)
