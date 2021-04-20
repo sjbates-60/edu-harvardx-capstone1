@@ -23,10 +23,11 @@ load("ml-10M100K/movielens_report.RData")
 # Overview
 
 In this report, I describe my exploration of a dataset of movie ratings made by
-many people over the course of several years, and my construction of a model for
-predicting ratings for specific movies by specific people. To test the model, I
-kept 10% of the ratings out of the model construction. These ratings were then
-used to determine the accuracy of the model.
+many people over the course of several years, and my construction of several
+models for predicting ratings for specific movies by specific people. To test
+the models, I used 90% of the ratings and compared their accuracy of their
+predictions. Once I had chosen a final model, I used it to predict the ratings
+on the final 10% of the ratings and reported how well it succeeded.
 
 # Exploration
 
@@ -38,8 +39,9 @@ different users. The ratings were taken between January 9, 1995 and January 5,
 -   `ratings.dat`, containing 10,000,054 observations, each with 4 variables:
     `userId`, `movieId`, `rating` (a number between 0 and 5), and `timestamp`;
 -   `movies.dat`, containing 10,681 observations, each with 3 variables:
-    `movieId`, `title` (which contains the title and year released), and
-    `genres` (which contains a list of genres separated by `|` symbols).
+    `movieId`, `title` (which contains the movie title and the year it was
+    released), and `genres` (which contains a list of genres separated by `|`
+    symbols).
 
 Tables 1 and 2 show the results of counting how many movies each user rated.
 Half of all users rated 69 or fewer movies, and 9 out of 10 rated 335 or fewer
@@ -67,7 +69,7 @@ rm(percents, high_percents)
 Figures 1 and 2 support the unsurprising results that a movie's rating depends
 on which user is rating the movie and which movie is being rated.
 
-```{r movie-correlation, fig.height=1.8, fig.cap=movie_caption}
+```{r movie-correlation, fig.height=1.6, fig.cap=movie_caption}
 movie_stats <- ratings %>% group_by(movieId)
 
 mean_movie_ratings <- movie_stats %>%
@@ -87,7 +89,7 @@ mean_movie_ratings %>%
   ylab("Rating")
 ```
 
-```{r user-correlation, fig.height=1,8, fig.cap=user_caption}
+```{r user-correlation, fig.height=1.6, fig.cap=user_caption}
 user_stats <- ratings %>% group_by(userId)
 
 mean_user_ratings <- user_stats %>%
@@ -154,7 +156,7 @@ My exploration was done in two phases. The first phase was to explore a linear
 combination of the non-genre variables. These variables are `userId`, `movieId`,
 `year`, and `timestamp`.[^1] Additionally, I calculated an age variable. The age
 is a measure of how old the movie was when the user rated it. I calculated it as
-`year(timestamp) + month(timestamp) / 13 - year`.[^2] Furthermore, I added
+`(year(timestamp) + month(timestamp) / 13) - year`.[^2] Furthermore, I added
 regularization to the models to reduce the effect of movies with few ratings.
 Using these variables, I tested four models:
 
@@ -164,26 +166,26 @@ Using these variables, I tested four models:
 [^2]: The division is by 13 instead of 12 so as to make December of one year
     distinct from January of the next year.
 
--   Regularized movie and user biases;
+-   Regularized movie and user effects;
 
--   Regularized movie, user, and year biases;
+-   Regularized movie, user, and year effects;
 
--   Regularized movie and user biases and a nonregularized age bias;
+-   Regularized movie and user effects and a nonregularized age effect;
 
--   Regularized movie, year, and age biases.
+-   Regularized movie, user, and age effects.
 
-For each model, I calculated an optimal tuning parameter for the regularization
-and then averaged the results from 5-fold cross validation of the training set.
-I then chose the model that resulted in the lowest RMSE on the entire training
-set.
+For each model, I calculated an optimal tuning parameter $\lambda$ for the
+regularization and then averaged the results from 5-fold cross validation of the
+training set. I then chose the model that resulted in the lowest RMSE on the
+entire training set.
 
-The second phase was to explore the effects of genre after removing the estimate
-from the first phase. Again, I chose a linear combination of genre variables as
-the model. To get the genre variables, I separated the `genres` variable into 20
-separate variables, one for each of the genres in Table 3. For display purposes,
-I abbreviated each genre to two characters. Each genre variable has a value of 1
-if the genre appears in the movie's `genres` variable and has a value of 0
-otherwise.
+The second phase was to explore the effects of genre after removing the best
+estimate from the first phase. Again, I chose a linear combination of genre
+variables as the model. To get the genre variables, I separated the `genres`
+variable into 20 separate variables, one for each of the genres in Table 3. For
+display purposes, I abbreviated each genre to two characters. Each genre
+variable has a value of 1 if the genre appears in the movie's `genres` variable
+and has a value of 0 otherwise.
 
 ```{r genres-table}
 all_genres <- unique(unlist(sapply(movies$genres,
@@ -209,12 +211,12 @@ knitr::kable(summary, col.names = c("Genre", "Abbr.",
 Mathematically, the model can be written as
 
 $$
-\hat{Y}_{m,u} = \sum_{g = 1}^{20}x_m^g b_g^u
+\hat{Y}_{m,u} = \sum_{g = 1}^{20}x_m^g e_g^u
 $$
 
 where $m$ is a movie, $u$ is a user, and $x_m^g$ is the genre variable described
-above. The exploration then becomes a calculation of the term $b_g^u$, the bias
-that user $u$ has for genre $g$, for each user and genre.
+above. The exploration then becomes a calculation of the term $e_g^u$, the
+effect of genre $g$ on user $u$, for each user and genre.
 
 I calculated the terms in two steps:
 
@@ -231,16 +233,18 @@ values in a row that correspond to the movie's genres.
 
 To compute $\hat{Y}_{m,u}$ efficiently, I note that the sum above can be
 rewritten as the dot product of the vectors $(x_m^1, …, x_m^{20})$ and
-$(b_1^u , … , b_{20}^u )$. The first vector is the genre categorization of movie
+$(e_1^u , … , e_{20}^u )$. The first vector is the genre categorization of movie
 $m$ and the second vector is the row of the above matrix for user $u$.
 Therefore, multiple ratings can be calculated by computing the product of two
 matrices:
 
--   Define $M$ to be a matrix containing the movies to be rated, each row
-    consisting of 0's and 1's depending on the movie's genre categorization.
+-   Define $M$ to be a matrix with a row for each movie to be rated, each row
+    containing $x_m^1$ through $x_m^{20}$.
 
--   Define $U$ to be a matrix containing the rows of the users whose ratings are
-    to be calculated.
+-   Define $U$ to be a matrix containing with a row for each user whose ratings
+    are to be calculated, each row containing $e_1^u$ through $e_{20}^u$. Row
+    $i$ of $U$ is for the user whose rating is desired for the corresponding row
+    $i$ of $M$.
 
 -   The product $U$ $\cdot$ $M^\intercal$ has the desired ratings on the
     diagonal.
@@ -262,7 +266,8 @@ over 5%.
 ```{r model-results}
 knitr::kable(model_results,
              digits = 5,
-             col.names = c("Model name", "$\\lambda$", "RMSE"))
+             col.names = c("Model name", "$\\lambda$", "RMSE"),
+             caption = "Results of models executed on the training set")
 ```
 
 # Conclusion
