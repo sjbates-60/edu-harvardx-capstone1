@@ -1,24 +1,245 @@
 # Outline -----------------------------------------------------------------
+# Subject: Recommendation System for PH125.9X Capstone course
 # Author: Samuel Bates
-
+#
+# This file contains the code used to achieve the results described in
+# movielens_report.pdf. It has the following sections:
+#   Logging functions:
+#     Functions for writing results with timestamps to the console and
+#     a log file. Also used to gauge how long various operations take.
+#                     
+#  Utility functions:
+#    Functions to split a dataset into training and test sets, and
+#    to calculate the RMSE of a vector of predictions.
+#
+#  Models using non-genre variables:
+#    Includes a description of the model structure and 4 models.
+#
+#  Main Program:
+#    1. Loads the data.
+#    2. Creates the training and validation sets.
+#    3. Compares the non-genre models using cross validation and
+#         logs the results.
+#    4. Creates a genre-based model.
+#    5. Checks the combined best non-genre model & genre model on the
+#         training set and logs the results.
+#    6. Checks the combined best non-genre model & genre model on the
+#         validation set and logs the results.
+#
+#   A few additional notes about the main program:
+#   - It periodically saves the environment so that portions can be
+#     re-run without starting over from scratch.
+#   - It periodically removes large objects so that the analysis does
+#     not fail due to running out of memory.
+#   - The code was executed on a Windows 7 PC with 6 GB of RAM.
+#     Memory issues were frequent, since the training set required
+#     1.6 GB of RAM.
+#
 require(tidyverse)
 require(caret)
 require(data.table)
 require(lubridate)
+require(log4r)
 
 options(digits = 5)
 
-## Logging ----------------------------------------------------------------
-source("src/logfile.R", echo = FALSE)
+## Logging functions ------------------------------------------------------
+z__logger <- NULL
 
-## Models to test ---------------------------------------------------------
-source("src/models.R", echo = FALSE)
+#-------------------------------------------------------------
+# Set up a simple log with time stamps. The log will write to
+# both the console and a log file.
+#
+log_start <- function() {
+  filename <- format(Sys.time(), "logs/%Y%m%d_%H%M%S.txt")
+  console_appender <- console_appender(layout = default_log_layout())
+  file_appender <- file_appender(filename, append = TRUE,
+                                 layout = default_log_layout())
+  z__logger <<- log4r::logger(threshold = "INFO",
+                              appenders = list(console_appender,
+                                               file_appender))
+}
 
+#-------------------------------------------------------------
+# Write a message to the console and a log file.
+log_info <- function(msg) {
+  if (is.null(z__logger))
+    log_start()
+  log4r::info(z__logger, msg)
+}
+
+## Utility functions-------------------------------------------------------
+
+#-------------------------------------------------------------
+# Partitions a dataset into a test set and training set.
+# Parameters:
+#   dataset    - A set of movie ratings.
+#   test_index - An index of rows for the test set.
+# Returns:
+#   A list of two sets: train and test. Every rating in
+#     dataset is in only one set.
+#
+get_training_and_test <- function(dataset, test_index) {
+  train <- dataset[-test_index, ]
+  temp <- dataset[test_index, ]
+
+  # Make sure userId and movieId in test set are also in training set
+  test <- temp %>%
+    semi_join(train, by = "movieId") %>%
+    semi_join(train, by = "userId")
+
+  # Add rows removed from test set back into training set
+  removed <- anti_join(temp, test, by = colnames(test))
+  train <- rbind(train, removed)
+  return(list(train = train, test = test))
+}
+
+
+
+.rmse <- function(predicted, actual) {
+  sqrt(mean((predicted - actual)^2))
+}
+
+
+## Model structure --------------------------------------------------------
+# Each of the following objects contains a model used to predict
+# movie ratings. Each object is a list containing two elements:
+# - a name indicating the model used; and
+# - a train() function used to train the model.
+# The train() function takes a dataset and a tuning parameter
+# and returns a list containing a predict() function to run
+# on a dataset.
+#
+
+### Regularized(Movie + User) Effects -------------------------------------
+model_reg_movie_user <- list(
+  name = "Regularized(Movie + User) Effects",
+  train = function(dataset, lambda) {
+    mu <- mean(dataset$rating)
+
+    b_i <- dataset %>%
+      group_by(movieId) %>%
+      summarize(b_i = sum(rating - mu) / (n() + lambda))
+
+    b_u <- dataset %>%
+      left_join(b_i, by = "movieId") %>%
+      group_by(userId) %>%
+      summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
+
+    predictfn <- function(dataset) {
+      dataset %>%
+        left_join(b_i, by = "movieId") %>%
+        left_join(b_u, by = "userId") %>%
+        mutate(pred = mu + b_i + b_u) %>%
+        pull(pred)
+    }
+    return(list(predict = predictfn))
+  }
+)
+
+### Regularized(Movie + User + Year) Effects ------------------------------
+model_reg_movie_user_year <- list(
+  name = "Regularized(Movie + User + Year) Effects",
+  train = function(dataset, lambda) {
+    mu <- mean(dataset$rating)
+
+    b_i <- dataset %>%
+      group_by(movieId) %>%
+      summarize(b_i = sum(rating - mu) / (n() + lambda))
+
+    b_u <- dataset %>%
+      left_join(b_i, by = "movieId") %>%
+      group_by(userId) %>%
+      summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
+
+    b_y <- dataset %>%
+      left_join(b_i, by = "movieId") %>%
+      left_join(b_u, by = "userId") %>%
+      group_by(year) %>%
+      summarize(b_y = sum(rating - b_u - b_i - mu) / (n() + lambda))
+
+    predictfn <- function(dataset) {
+      dataset %>%
+        left_join(b_i, by = "movieId") %>%
+        left_join(b_u, by = "userId") %>%
+        left_join(b_y, by = "year") %>%
+        mutate(pred = mu + b_i + b_u + b_y) %>%
+        pull(pred)
+    }
+    return(list(predict = predictfn))
+  }
+)
+
+### Age + Regularized(Movie + User) Effects -------------------------------
+model_age_reg_movie_user <- list(
+  name = "Age + Regularized(Movie + User) Effects",
+  train = function(dataset, lambda) {
+    mu <- mean(dataset$rating)
+
+    b_i <- dataset %>%
+      group_by(movieId) %>%
+      summarize(b_i = sum(rating - mu) / (n() + lambda))
+
+    b_u <- dataset %>%
+      left_join(b_i, by = "movieId") %>%
+      group_by(userId) %>%
+      summarize(b_u = mean(rating - b_i - mu))
+
+    b_a <- dataset %>%
+      left_join(b_i, by = "movieId") %>%
+      left_join(b_u, by = "userId") %>%
+      group_by(age) %>%
+      summarize(b_a = sum(rating - b_u - b_i - mu) / (n() + lambda))
+
+    predictfn <- function(dataset) {
+      dataset %>%
+        left_join(b_i, by = "movieId") %>%
+        left_join(b_u, by = "userId") %>%
+        left_join(b_a, by = "age") %>%
+        mutate(pred = mu + b_i + b_u + b_a) %>%
+        pull(pred)
+    }
+    return(list(predict = predictfn))
+  }
+)
+
+### Regularized(Movie + User + Age) Effects -------------------------------
+model_reg_movie_user_age <- list(
+  name = "Regularized(Movie + User + Age) Effects",
+  train = function(dataset, lambda) {
+    mu <- mean(dataset$rating)
+
+    b_i <- dataset %>%
+      group_by(movieId) %>%
+      summarize(b_i = sum(rating - mu) / (n() + lambda))
+
+    b_u <- dataset %>%
+      left_join(b_i, by = "movieId") %>%
+      group_by(userId) %>%
+      summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
+
+    b_a <- dataset %>%
+      left_join(b_i, by = "movieId") %>%
+      left_join(b_u, by = "userId") %>%
+      group_by(age) %>%
+      summarize(b_a = sum(rating - b_u - b_i - mu) / (n() + lambda))
+
+    predictfn <- function(dataset) {
+      dataset %>%
+        left_join(b_i, by = "movieId") %>%
+        left_join(b_u, by = "userId") %>%
+        left_join(b_a, by = "age") %>%
+        mutate(pred = mu + b_i + b_u + b_a) %>%
+        pull(pred)
+    }
+    return(list(predict = predictfn))
+  }
+)
 
 # Main Program ------------------------------------------------------------
 
 
-## Load data --------------------------------------------------------------
+## 1. Load data --------------------------------------------------------------
 log_start()
 
 log_info("Loading data...")
@@ -37,6 +258,7 @@ remove(records)
 
 log_info("Ratings data loaded.")
 
+## 2. Create training and test sets ------------------------------------------
 log_info("Creating training data...")
 
 # Validation set will be 10% of MovieLens data
@@ -63,8 +285,8 @@ colnames(movies) <- c("movieId", "title", "genres")
 movies <- as.data.table(movies) %>%
   mutate(movieId = as.numeric(movieId))
 
-# Space saving move: shorten the name of each genre to two characters.
-movies <- movies %>% 
+# For display purposes, shorten the name of each genre to two characters.
+movies <- movies %>%
   mutate(genres = gsub("([^\\|]{2})[^\\|]+", "\\1", genres)) %>%
   mutate(genres = sub("Sc", "SF", genres)) %>%
   mutate(genres = sub("Fi", "FN", genres)) %>%
@@ -80,7 +302,7 @@ title_year <- map_dfr(movies$title, function(t) {
 movies <- cbind(movies[, 1], title_year, movies[, 3])
 
 # Get individual genres for later use.
-all_genres <- unique(unlist(sapply(movies$genres, 
+all_genres <- unique(unlist(sapply(movies$genres,
                                    function(g) strsplit(g, "\\|"))))
 
 edx <- left_join(edx, movies, by = "movieId")
@@ -88,9 +310,9 @@ validation <- left_join(validation, movies, by = "movieId")
 
 # Add a variable for how old the movie was when the rating was done.
 fractional_year <- function(ts) year(ts) + month(ts) / 13
-edx <- edx %>% 
+edx <- edx %>%
   mutate(age = fractional_year(timestamp) - year)
-validation <- validation %>% 
+validation <- validation %>%
   mutate(age = fractional_year(timestamp) - year)
 
 remove(title_year, movies, fractional_year)
@@ -102,14 +324,14 @@ save(file = "ml-10M100K/cp01.RData",
      list = setdiff(ls(), ls(pattern = ".*log")))
 
 
-## Train with cross-validation ---------------------------------------------
-# Try a few linear models, using 5-fold cross validation on each one.
+## 3. Train with cross-validation ---------------------------------------------
+# Try a few non-genre models, using 5-fold cross validation on each one.
 #
 suppressWarnings(set.seed(10, sample.kind = "Rounding"))
 kfold_sets <- createFolds(edx$rating, k = 5)
 
-models <- list(model_reg_movie_user, 
-               model_reg_movie_user_year, 
+models <- list(model_reg_movie_user,
+               model_reg_movie_user_year,
                model_age_reg_movie_user,
                model_reg_movie_user_age)
 
@@ -120,11 +342,11 @@ model_results <- map_dfr(models, function(model) {
   # For each fold:
   tunings <- map_dfr(seq_len(length(kfold_sets)), function(i) {
     log_info(paste("Training on k-fold set", i))
-    
+
     # Construct the training and test sets.
     temp <- get_training_and_test(edx, kfold_sets[[i]])
     train <- temp$train ; test <- temp$test ; remove(temp)
-    
+
     # Apply the model with several tuning parameters.
     lambdas <- seq(0, 8, 0.5)
     rmses <- sapply(lambdas, function(l) {
@@ -138,17 +360,17 @@ model_results <- map_dfr(models, function(model) {
     return(tibble(lambda = lambdas[min_rmse], rmse = rmses[min_rmse]))
   })
   log_info("Training on k-fold sets ended.")
-  
+
   # Average the tuning parameters on the folds to get a new value
   # and use the model on the entire training set to calculate a new error.
   best_lambda <- mean(tunings$lambda)
   fit <- model$train(edx, best_lambda)
   predicted <- fit$predict(edx)
   rmse <- .rmse(predicted, edx$rating)
-  
+
   log_info(paste("Best fit for", model$name, ": lambda =", best_lambda,
                  "RMSE =", rmse))
-  
+
   tibble(name = model$name, lambda = best_lambda, RMSE = rmse, fit = fit)
 })
 
@@ -156,39 +378,39 @@ remove(kfold_sets)
 
 # Pick the best model.
 model_index <- which.min(model_results$RMSE)
-chosen_linear_model <- model_results[model_index, ]
-log_info(paste("The model with the best fit is", chosen_linear_model$name,
-               "with RMSE", chosen_linear_model$RMSE))
+chosen_nongenre_model <- model_results[model_index, ]
+log_info(paste("The model with the best fit is", chosen_nongenre_model$name,
+               "with RMSE", chosen_nongenre_model$RMSE))
 
-linear_model_predictions <- chosen_linear_model$fit$predict(edx)
+nongenre_predictions <- chosen_nongenre_model$fit$predict(edx)
 
-remove(model_results, model_index)
+remove(model_results, model_index, models)
 
 # Save checkpoint data (don't save logging objects).
 save(file = "ml-10M100K/cp02.RData",
      list = setdiff(ls(), ls(pattern = ".*log")))
 
-## Create genre model ------------------------------------------------------
+## 4. Create genre model ------------------------------------------------------
 # Add individual genre variables to the training and validation sets.
 #
 log_info("Adding individual genre variables to training and validation sets.")
 separate_genres <- map_dfc(
   all_genres, function(g) ifelse(grepl(g, edx$genres), 1, 0))
 colnames(separate_genres) <- all_genres
-edx <- edx %>% select(-title, -year, -timestamp, -genres)
+edx <- edx %>% select(-title, -year, -timestamp, -age, -genres)
 edx <- cbind(edx, separate_genres)
 
 separate_genres <- map_dfc(
   all_genres, function(g) ifelse(grepl(g, validation$genres), 1, 0))
 colnames(separate_genres) <- all_genres
-validation <- validation %>% select(-title, -year, -timestamp, -genres)
+validation <- validation %>% select(-title, -year, -timestamp, -age, -genres)
 validation <- cbind(validation, separate_genres)
 
 remove(separate_genres)
 
 # Calculate residuals left after linear model predictions are removed.
 edx_residuals <- edx %>%
-  mutate(rating = rating - linear_model_predictions)
+  mutate(rating = rating - nongenre_predictions)
 
 # Produce a weighted genre vector for each user in two steps.
 # First, spread each rating evenly across a movie's genres.
@@ -200,10 +422,14 @@ user_mean_rating <- edx_residuals %>%
   })) %>%
   select(userId, rating, all_of(all_genres))
 
-# Second, computer the average rating for each genre.
+# Second, compute the average rating for each genre, counting only the rows
+# that contain the genre.
 user_mean_rating <- user_mean_rating %>%
   group_by(userId) %>%
-  summarize(across(all_of(all_genres), function(x) mean(x)))
+  summarize(across(.cols = all_of(all_genres),
+                   .fns = c(
+                     function(x) ifelse(any(x != 0), sum(x) / sum(x != 0), 0))))
+colnames(user_mean_rating) <- c("userId", all_genres)
 
 # The predicted rating for a movie is then the sum of the user's mean
 # ratings of each of the movie's genres.
@@ -215,20 +441,21 @@ genre_predictfn <- function(dataset) {
   groups <- split(seq_len(nrow(dataset)), sort(seq_len(nrow(dataset)) %% 900))
 
   res <- lapply(groups, function(g) {
-    if (first(g) %% 500000 < 1000) 
+    if (first(g) %% 500000 < 1000)
       log_info(paste("Processing records up to", last(g)))
-    
+
     # Get movies to be rated and extract their genres.
     movie_ratings <- dataset[g, ]
-    movie_genres <- as.matrix(movie_ratings %>% 
+    movie_genres <- as.matrix(movie_ratings %>%
                                 select(all_of(all_genres)))
-    
+
     # Find the user mean ratings for the users rating those movies.
     user_idx <- match(movie_ratings$userId, user_mean_rating$userId)
-    user_genres <- as.matrix(user_mean_rating[user_idx, ] %>% 
+    user_genres <- as.matrix(user_mean_rating[user_idx, ] %>%
                                select(all_of(all_genres)))
-    
-    # Multiply to get the predicted ratings.
+
+    # Multiply to get the predicted ratings. The diagonal of the
+    # resulting matrix contains the predictions for the selected users.
     diag(user_genres %*% t(movie_genres))
   })
   unlist(res)
@@ -238,32 +465,32 @@ genre_predictfn <- function(dataset) {
 save(file = "ml-10M100K/cp03.RData",
      list = setdiff(ls(), ls(pattern = ".*log")))
 
-## Test genre model -------------------------------------------------------
-# Check results of combining linear and genre models on the training set.
+## 5. Test genre model -------------------------------------------------------
+# Check results of combining non-genre and genre models on the training set.
 #
-log_info("Checking the result of linear and genre models together.")
+log_info("Checking the result of non-genre and genre models together.")
 
 genre_predictions <- genre_predictfn(edx_residuals)
-combined_predictions <- linear_model_predictions + genre_predictions
+combined_predictions <- nongenre_predictions + genre_predictions
 combined_rmse <- .rmse(combined_predictions, edx$rating)
 
 log_info(paste("Combined models: RMSE =", combined_rmse))
 
 remove(edx_residuals)
 
-## Final Check ------------------------------------------------------------
+## 6. Final Check ------------------------------------------------------------
 #
 # Test the model on the validation set.
 #
-validation_linear_predictions <- chosen_linear_model$fit$predict(validation)
+val_nongenre_predictions <- chosen_nongenre_model$fit$predict(validation)
 validation_residuals <- validation %>%
-  mutate(rating = rating - validation_linear_predictions)
+  mutate(rating = rating - val_nongenre_predictions)
 
 # Save checkpoint data (don't save logging objects).
 save(file = "ml-10M100K/cp04.RData",
      list = setdiff(ls(), ls(pattern = ".*log")))
 
-validation_predictions <- validation_linear_predictions +
+validation_predictions <- val_nongenre_predictions +
   genre_predictfn(validation_residuals)
 validation_rmse <- .rmse(validation_predictions, validation$rating)
 log_info(paste("Final RMSE is", validation_rmse))
