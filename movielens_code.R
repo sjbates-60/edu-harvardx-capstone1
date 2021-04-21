@@ -96,7 +96,7 @@ get_training_and_test <- function(dataset, test_index) {
 
 #-------------------------------------------------------------
 # Calculates the root mean squared error.
-# Parameter:
+# Parameters:
 #   predicted - a vector of predicted values
 #   actual    - a vector of values to check against
 # Returns:
@@ -123,20 +123,20 @@ model_reg_movie_user <- list(
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
-    e_i <- dataset %>%
+    e_m <- dataset %>%
       group_by(movieId) %>%
-      summarize(e_i = sum(rating - mu) / (n() + lambda))
+      summarize(e_m = sum(rating - mu) / (n() + lambda))
 
     e_u <- dataset %>%
-      left_join(e_i, by = "movieId") %>%
+      left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(e_u = sum(rating - e_i - mu) / (n() + lambda))
+      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
 
     predictfn <- function(dataset) {
       dataset %>%
-        left_join(e_i, by = "movieId") %>%
+        left_join(e_m, by = "movieId") %>%
         left_join(e_u, by = "userId") %>%
-        mutate(pred = mu + e_i + e_u) %>%
+        mutate(pred = mu + e_m + e_u) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -149,27 +149,27 @@ model_reg_movie_user_year <- list(
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
-    e_i <- dataset %>%
+    e_m <- dataset %>%
       group_by(movieId) %>%
-      summarize(e_i = sum(rating - mu) / (n() + lambda))
+      summarize(e_m = sum(rating - mu) / (n() + lambda))
 
     e_u <- dataset %>%
-      left_join(e_i, by = "movieId") %>%
+      left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(e_u = sum(rating - e_i - mu) / (n() + lambda))
+      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
 
     e_y <- dataset %>%
-      left_join(e_i, by = "movieId") %>%
+      left_join(e_m, by = "movieId") %>%
       left_join(e_u, by = "userId") %>%
       group_by(year) %>%
-      summarize(e_y = sum(rating - e_u - e_i - mu) / (n() + lambda))
+      summarize(e_y = sum(rating - e_u - e_m - mu) / (n() + lambda))
 
     predictfn <- function(dataset) {
       dataset %>%
-        left_join(e_i, by = "movieId") %>%
+        left_join(e_m, by = "movieId") %>%
         left_join(e_u, by = "userId") %>%
         left_join(e_y, by = "year") %>%
-        mutate(pred = mu + e_i + e_u + e_y) %>%
+        mutate(pred = mu + e_m + e_u + e_y) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -182,27 +182,27 @@ model_age_reg_movie_user <- list(
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
-    e_i <- dataset %>%
+    e_m <- dataset %>%
       group_by(movieId) %>%
-      summarize(e_i = sum(rating - mu) / (n() + lambda))
+      summarize(e_m = sum(rating - mu) / (n() + lambda))
 
     e_u <- dataset %>%
-      left_join(e_i, by = "movieId") %>%
+      left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(e_u = mean(rating - e_i - mu))
+      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
 
     e_a <- dataset %>%
-      left_join(e_i, by = "movieId") %>%
+      left_join(e_m, by = "movieId") %>%
       left_join(e_u, by = "userId") %>%
       group_by(age) %>%
-      summarize(e_a = sum(rating - e_u - e_i - mu) / (n() + lambda))
+      summarize(e_a = mean(rating - e_u - e_m - mu))
 
     predictfn <- function(dataset) {
       dataset %>%
-        left_join(e_i, by = "movieId") %>%
+        left_join(e_m, by = "movieId") %>%
         left_join(e_u, by = "userId") %>%
         left_join(e_a, by = "age") %>%
-        mutate(pred = mu + e_i + e_u + e_a) %>%
+        mutate(pred = mu + e_m + e_u + e_a) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -215,27 +215,27 @@ model_reg_movie_user_age <- list(
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
-    e_i <- dataset %>%
+    e_m <- dataset %>%
       group_by(movieId) %>%
-      summarize(e_i = sum(rating - mu) / (n() + lambda))
+      summarize(e_m = sum(rating - mu) / (n() + lambda))
 
     e_u <- dataset %>%
-      left_join(e_i, by = "movieId") %>%
+      left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(e_u = sum(rating - e_i - mu) / (n() + lambda))
+      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
 
     e_a <- dataset %>%
-      left_join(e_i, by = "movieId") %>%
+      left_join(e_m, by = "movieId") %>%
       left_join(e_u, by = "userId") %>%
       group_by(age) %>%
-      summarize(e_a = sum(rating - e_u - e_i - mu) / (n() + lambda))
+      summarize(e_a = sum(rating - e_u - e_m - mu) / (n() + lambda))
 
     predictfn <- function(dataset) {
       dataset %>%
-        left_join(e_i, by = "movieId") %>%
+        left_join(e_m, by = "movieId") %>%
         left_join(e_u, by = "userId") %>%
         left_join(e_a, by = "age") %>%
-        mutate(pred = mu + e_i + e_u + e_a) %>%
+        mutate(pred = mu + e_m + e_u + e_a) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -389,6 +389,7 @@ log_info(paste("The model with the best fit is", chosen_nongenre_model$name,
                "with RMSE", chosen_nongenre_model$RMSE))
 
 nongenre_predictions <- chosen_nongenre_model$fit$predict(edx)
+val_nongenre_predictions <- chosen_nongenre_model$fit$predict(validation)
 
 remove(model_results, model_index, models)
 
@@ -417,6 +418,7 @@ remove(separate_genres)
 # Calculate residuals left after linear model predictions are removed.
 edx_residuals <- edx %>%
   mutate(rating = rating - nongenre_predictions)
+edx <- edx %>% select(rating)
 
 # Produce a weighted genre vector for each user in two steps.
 # First, spread each rating evenly across a movie's genres.
@@ -436,6 +438,8 @@ user_mean_rating <- user_mean_rating %>%
                    .fns = c(
                      function(x) ifelse(any(x != 0), sum(x) / sum(x != 0), 0))))
 colnames(user_mean_rating) <- c("userId", all_genres)
+
+log_info("Completed weighted genre vectors.")
 
 # The predicted rating for a movie is then the sum of the user's mean
 # ratings of each of the movie's genres.
@@ -488,7 +492,6 @@ remove(edx_residuals)
 #
 # Test the model on the validation set.
 #
-val_nongenre_predictions <- chosen_nongenre_model$fit$predict(validation)
 validation_residuals <- validation %>%
   mutate(rating = rating - val_nongenre_predictions)
 
