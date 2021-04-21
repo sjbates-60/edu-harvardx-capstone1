@@ -106,6 +106,13 @@ rmse <- function(predicted, actual) {
   sqrt(mean((predicted - actual)^2))
 }
 
+#-------------------------------------------------------------
+# Returns the parameter if it is not NA and 0 otherwise.
+# Needed in the models for variables that may not be present.
+#
+val_or_0 <- function(x)
+  ifelse(!is.na(x), x, 0)
+
 
 ## Model structure --------------------------------------------------------
 # Each of the following objects contains a model used to predict
@@ -169,7 +176,7 @@ model_reg_movie_user_year <- list(
         left_join(e_m, by = "movieId") %>%
         left_join(e_u, by = "userId") %>%
         left_join(e_y, by = "year") %>%
-        mutate(pred = mu + e_m + e_u + e_y) %>%
+        mutate(pred = mu + e_m + e_u + val_or_0(e_y)) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -202,7 +209,7 @@ model_age_reg_movie_user <- list(
         left_join(e_m, by = "movieId") %>%
         left_join(e_u, by = "userId") %>%
         left_join(e_a, by = "age") %>%
-        mutate(pred = mu + e_m + e_u + e_a) %>%
+        mutate(pred = mu + e_m + e_u + val_or_0(e_a)) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -235,7 +242,7 @@ model_reg_movie_user_age <- list(
         left_join(e_m, by = "movieId") %>%
         left_join(e_u, by = "userId") %>%
         left_join(e_a, by = "age") %>%
-        mutate(pred = mu + e_m + e_u + e_a) %>%
+        mutate(pred = mu + e_m + e_u + val_or_0(e_a)) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
