@@ -94,9 +94,15 @@ get_training_and_test <- function(dataset, test_index) {
   return(list(train = train, test = test))
 }
 
-
-
-.rmse <- function(predicted, actual) {
+#-------------------------------------------------------------
+# Calculates the root mean squared error.
+# Parameter:
+#   predicted - a vector of predicted values
+#   actual    - a vector of values to check against
+# Returns:
+#   The error.
+#
+rmse <- function(predicted, actual) {
   sqrt(mean((predicted - actual)^2))
 }
 
@@ -117,20 +123,20 @@ model_reg_movie_user <- list(
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
-    b_i <- dataset %>%
+    e_i <- dataset %>%
       group_by(movieId) %>%
-      summarize(b_i = sum(rating - mu) / (n() + lambda))
+      summarize(e_i = sum(rating - mu) / (n() + lambda))
 
-    b_u <- dataset %>%
-      left_join(b_i, by = "movieId") %>%
+    e_u <- dataset %>%
+      left_join(e_i, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
+      summarize(e_u = sum(rating - e_i - mu) / (n() + lambda))
 
     predictfn <- function(dataset) {
       dataset %>%
-        left_join(b_i, by = "movieId") %>%
-        left_join(b_u, by = "userId") %>%
-        mutate(pred = mu + b_i + b_u) %>%
+        left_join(e_i, by = "movieId") %>%
+        left_join(e_u, by = "userId") %>%
+        mutate(pred = mu + e_i + e_u) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -143,27 +149,27 @@ model_reg_movie_user_year <- list(
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
-    b_i <- dataset %>%
+    e_i <- dataset %>%
       group_by(movieId) %>%
-      summarize(b_i = sum(rating - mu) / (n() + lambda))
+      summarize(e_i = sum(rating - mu) / (n() + lambda))
 
-    b_u <- dataset %>%
-      left_join(b_i, by = "movieId") %>%
+    e_u <- dataset %>%
+      left_join(e_i, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
+      summarize(e_u = sum(rating - e_i - mu) / (n() + lambda))
 
-    b_y <- dataset %>%
-      left_join(b_i, by = "movieId") %>%
-      left_join(b_u, by = "userId") %>%
+    e_y <- dataset %>%
+      left_join(e_i, by = "movieId") %>%
+      left_join(e_u, by = "userId") %>%
       group_by(year) %>%
-      summarize(b_y = sum(rating - b_u - b_i - mu) / (n() + lambda))
+      summarize(e_y = sum(rating - e_u - e_i - mu) / (n() + lambda))
 
     predictfn <- function(dataset) {
       dataset %>%
-        left_join(b_i, by = "movieId") %>%
-        left_join(b_u, by = "userId") %>%
-        left_join(b_y, by = "year") %>%
-        mutate(pred = mu + b_i + b_u + b_y) %>%
+        left_join(e_i, by = "movieId") %>%
+        left_join(e_u, by = "userId") %>%
+        left_join(e_y, by = "year") %>%
+        mutate(pred = mu + e_i + e_u + e_y) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -176,27 +182,27 @@ model_age_reg_movie_user <- list(
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
-    b_i <- dataset %>%
+    e_i <- dataset %>%
       group_by(movieId) %>%
-      summarize(b_i = sum(rating - mu) / (n() + lambda))
+      summarize(e_i = sum(rating - mu) / (n() + lambda))
 
-    b_u <- dataset %>%
-      left_join(b_i, by = "movieId") %>%
+    e_u <- dataset %>%
+      left_join(e_i, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(b_u = mean(rating - b_i - mu))
+      summarize(e_u = mean(rating - e_i - mu))
 
-    b_a <- dataset %>%
-      left_join(b_i, by = "movieId") %>%
-      left_join(b_u, by = "userId") %>%
+    e_a <- dataset %>%
+      left_join(e_i, by = "movieId") %>%
+      left_join(e_u, by = "userId") %>%
       group_by(age) %>%
-      summarize(b_a = sum(rating - b_u - b_i - mu) / (n() + lambda))
+      summarize(e_a = sum(rating - e_u - e_i - mu) / (n() + lambda))
 
     predictfn <- function(dataset) {
       dataset %>%
-        left_join(b_i, by = "movieId") %>%
-        left_join(b_u, by = "userId") %>%
-        left_join(b_a, by = "age") %>%
-        mutate(pred = mu + b_i + b_u + b_a) %>%
+        left_join(e_i, by = "movieId") %>%
+        left_join(e_u, by = "userId") %>%
+        left_join(e_a, by = "age") %>%
+        mutate(pred = mu + e_i + e_u + e_a) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -209,27 +215,27 @@ model_reg_movie_user_age <- list(
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
-    b_i <- dataset %>%
+    e_i <- dataset %>%
       group_by(movieId) %>%
-      summarize(b_i = sum(rating - mu) / (n() + lambda))
+      summarize(e_i = sum(rating - mu) / (n() + lambda))
 
-    b_u <- dataset %>%
-      left_join(b_i, by = "movieId") %>%
+    e_u <- dataset %>%
+      left_join(e_i, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(b_u = sum(rating - b_i - mu) / (n() + lambda))
+      summarize(e_u = sum(rating - e_i - mu) / (n() + lambda))
 
-    b_a <- dataset %>%
-      left_join(b_i, by = "movieId") %>%
-      left_join(b_u, by = "userId") %>%
+    e_a <- dataset %>%
+      left_join(e_i, by = "movieId") %>%
+      left_join(e_u, by = "userId") %>%
       group_by(age) %>%
-      summarize(b_a = sum(rating - b_u - b_i - mu) / (n() + lambda))
+      summarize(e_a = sum(rating - e_u - e_i - mu) / (n() + lambda))
 
     predictfn <- function(dataset) {
       dataset %>%
-        left_join(b_i, by = "movieId") %>%
-        left_join(b_u, by = "userId") %>%
-        left_join(b_a, by = "age") %>%
-        mutate(pred = mu + b_i + b_u + b_a) %>%
+        left_join(e_i, by = "movieId") %>%
+        left_join(e_u, by = "userId") %>%
+        left_join(e_a, by = "age") %>%
+        mutate(pred = mu + e_i + e_u + e_a) %>%
         pull(pred)
     }
     return(list(predict = predictfn))
@@ -352,7 +358,7 @@ model_results <- map_dfr(models, function(model) {
     rmses <- sapply(lambdas, function(l) {
       fit <- model$train(train, l)
       predicted <- fit$predict(test)
-      .rmse(predicted, test$rating)
+      rmse(predicted, test$rating)
     })
 
     # Return the best tuning parameter and its corresponding error.
@@ -366,7 +372,7 @@ model_results <- map_dfr(models, function(model) {
   best_lambda <- mean(tunings$lambda)
   fit <- model$train(edx, best_lambda)
   predicted <- fit$predict(edx)
-  rmse <- .rmse(predicted, edx$rating)
+  rmse <- rmse(predicted, edx$rating)
 
   log_info(paste("Best fit for", model$name, ": lambda =", best_lambda,
                  "RMSE =", rmse))
@@ -472,7 +478,7 @@ log_info("Checking the result of non-genre and genre models together.")
 
 genre_predictions <- genre_predictfn(edx_residuals)
 combined_predictions <- nongenre_predictions + genre_predictions
-combined_rmse <- .rmse(combined_predictions, edx$rating)
+combined_rmse <- rmse(combined_predictions, edx$rating)
 
 log_info(paste("Combined models: RMSE =", combined_rmse))
 
@@ -492,5 +498,5 @@ save(file = "ml-10M100K/cp04.RData",
 
 validation_predictions <- val_nongenre_predictions +
   genre_predictfn(validation_residuals)
-validation_rmse <- .rmse(validation_predictions, validation$rating)
+validation_rmse <- rmse(validation_predictions, validation$rating)
 log_info(paste("Final RMSE is", validation_rmse))
