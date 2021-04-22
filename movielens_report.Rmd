@@ -1,9 +1,9 @@
 ---
-title: "Creating a Movie Recommendation System"
+title: "Modelling Movie Ratings"
 subtitle: "Report for HarvardX PH125.9x: Data Science: Capstone"
 author: "Samuel Bates"
 output: pdf_document
-geometry: margin=1.1in
+geometry: bottom=1.1in
 editor_options: 
   markdown: 
     wrap: 80
@@ -23,7 +23,7 @@ load("ml-10M100K/movielens_report.RData")
 # Overview
 
 In this report, I describe my exploration of a dataset of movie ratings made by
-many people over the course of several years, and my construction of several
+many people over the course of fourteen years, and my construction of several
 models for predicting ratings for specific movies by specific people. To test
 the models, I used 90% of the ratings and compared their accuracy of their
 predictions. Once I had chosen a final model, I used it to predict the ratings
@@ -34,7 +34,7 @@ on the final 10% of the ratings and reported how well it succeeded.
 The dataset contains 10,000,054 ratings of movies by people (hereinafter
 referred to as *users*). There are 10,677 different movies rated and 69,878
 different users. The ratings were taken between January 9, 1995 and January 5,
-2009. The dataset is provided as two files:
+2009. The dataset was provided as two files:
 
 -   `ratings.dat`, containing 10,000,054 observations, each with 4 variables:
     `userId`, `movieId`, `rating` (a number between 0 and 5), and `timestamp`;
@@ -45,7 +45,8 @@ different users. The ratings were taken between January 9, 1995 and January 5,
 
 Tables 1 and 2 show the results of counting how many movies each user rated.
 Half of all users rated 69 or fewer movies, and 9 out of 10 rated 335 or fewer
-movies. Only about 1% of the users rated more than 1000 movies.
+movies. Every user rated at least 20 movies, and roughly 1% of the users rated
+more than 1000 movies.
 
 ```{r user-stats}
 percents <- ratings %>%
@@ -63,11 +64,17 @@ high_percents <- ratings %>%
   quantile(probs = seq(.9, 1, .01))
 knitr::kable(t(high_percents), 
              caption = "Number of movies rated by high-volume users")
+
 rm(percents, high_percents)
 ```
 
-Figures 1 and 2 support the unsurprising results that a movie's rating depends
-on which user is rating the movie and which movie is being rated.
+I present three plots to motivate the use of the different variables in
+modelling ratings. Figure 1 shows that there is a positive correlation between a
+movie's average rating and the number of times it was rated. This make intuitive
+sense; more people will tend to go to movies that they hear have good reviews.
+Figure 2 shows that there is a negative correlation between a user's average
+rating and the number of movies rated by that user. One can imagine that such a
+user is harder to impress, having seen so many movies.
 
 ```{r movie-correlation, fig.height=1.6, fig.cap=movie_caption}
 movie_stats <- ratings %>% group_by(movieId)
@@ -108,11 +115,11 @@ mean_user_ratings %>%
   ylab("Rating")
 ```
 
-A movie's ratings may also change over time. Figure 3 shows how the average
-rating per month of the movie "Jerry Maguire" decreases over the 14 years after
-it was released.
+Lastly, a movie's ratings may also change over time. Figure 3 shows how the
+average rating per month of the movie "Jerry Maguire" decreased over the 14
+years after it was released.
 
-```{r rating-vs-time, fig.height=1.8, fig.cap="A movie's rating can change over tim."}
+```{r rating-vs-time, fig.height=1.8, fig.cap="A movie's rating can change over time."}
 ratings %>% 
   filter(movieId == 1393) %>%
   mutate(delay = year(timestamp) - 1996 + month(timestamp) / 13) %>%
@@ -150,34 +157,47 @@ I created a training set containing 9,000,055 ratings and a validation set
 containing 999,999 ratings. All exploration and modelling was done exclusively
 on the training set.
 
-## Models
+My exploration was done in two phases. In the first phase, I tested models that
+excluded the genres of the movies. In the second phase, I subtracted the best
+model's predicted values from the actual values, and created genre variables to
+model the result.
 
-My exploration was done in two phases. The first phase was to explore a linear
-combination of the non-genre variables. These variables are `userId`, `movieId`,
-`year`, and `timestamp`.[^1] Additionally, I calculated an age variable. The age
-is a measure of how old the movie was when the user rated it. I calculated it as
-`(year(timestamp) + month(timestamp) / 13) - year`.[^2] Furthermore, I added
-regularization to the models to reduce the effect of movies with few ratings.
-Using these variables, I tested four models:
+## Models without Genre
+
+The non-genre variables are `userId`, `movieId`, `year`, and `timestamp`.[^1]
+Additionally, I calculated an age variable. The age is a measure of how old the
+movie was when the user rated it. I calculated it as
+`(year(timestamp) + month(timestamp) / 13) - year`. I divided by 13 instead of
+by 12 so that the integral part of the age would equal the year of the rating
+(otherwise, ratings in December would have the integral part equal to the next
+year). I chose the month for the fraction rather than the day or week, as it
+exhibited a smoother rate of change.
 
 [^1]: I left out `title` as I could not think of a useful distance function
     between titles.
 
-[^2]: The division is by 13 instead of 12 so as to make December of one year
-    distinct from January of the next year.
+Furthermore, I added regularization to the models to reduce the effect of movies
+with few ratings. Using these variables, I tested eight models, grouped in pairs
+that differed only in whether the user effects were regularized:
 
--   Regularized movie and user effects;
+-   Movie and user effects, with either both regularized or only movie effects
+    regularized;
 
--   Regularized movie, user, and year effects;
+-   Movie, user, and year effects, with either all three regularized or only
+    movie and year effects regularized;
 
--   Regularized movie and user effects and a nonregularized age effect;
+-   Movie, user, and age effects, with either movie and user effects regularized
+    or only movie effects regularized;
 
--   Regularized movie, user, and age effects.
+-   Movie, user, and age effects, with either all three regularized or only
+    movie and age effects regularized.
 
 For each model, I calculated an optimal tuning parameter $\lambda$ for the
-regularization and then averaged the results from 5-fold cross validation of the
+regularization and then averaged the results from 5-fold cross validation on the
 training set. I then chose the model that resulted in the lowest RMSE on the
 entire training set.
+
+## Models with Genre
 
 The second phase was to explore the effects of genre after removing the best
 estimate from the first phase. Again, I chose a linear combination of genre
@@ -220,21 +240,28 @@ effect of genre $g$ on user $u$, for each user and genre.
 
 I calculated the terms in two steps:
 
-1.  For each rating in the training set, I gave equal fractions of it to each of
-    the movie's genres. Thus, if a movie with genres {Ad, Co, Ro} received a
-    rating of 4.5, I assigned a rating of 1.5 to each of the three genres.
+1.  For each rating in the training set, I gave equal fractions to each of the
+    movie's genres. Thus, if a movie with genres {Ad, Co, Ro} received a rating
+    of 4.5, I assigned a rating of 1.5 to each of the three genres.
 
 2.  For each user, I gathered the fractional ratings calculated in Step 1 and
-    computed the average within each genre.
+    computed the average for each genre. For example, if a user rated 3 movies
+    with genres {Ad, Co} and 5 movies with genres {Co, Ro}, the Ad genre would
+    get an average of 3 values, the Co genre would get an average of 8 values,
+    and the Ro genre would get an average of 5 values.
 
 The result is a matrix with 69,878 rows and 20 columns: 1 row for each user and
 1 column for each genre. The rating for a movie is then computed by summing the
 values in a row that correspond to the movie's genres.
 
-To compute $\hat{Y}_{m,u}$ efficiently, I note that the sum above can be
-rewritten as the dot product of the vectors $(x_m^1, …, x_m^{20})$ and
-$(e_1^u , … , e_{20}^u )$. The first vector is the genre categorization of movie
-$m$ and the second vector is the row of the above matrix for user $u$.
+I also included a tuning factor in the model. Since the $e_g^u$ terms are
+averages, I calculated the RMSE for $\lambda_2 \cdot \sum e_g^u$ for values of
+$\lambda_2$ in a range, and chose the one that produced the lowest RMSE.
+
+To compute $\hat{Y}_{m,u}$ efficiently, note that the sum above can be rewritten
+as the dot product of the vectors $(x_m^1, \ldots , x_m^{20})$ and
+$(e_1^u , \ldots , e_{20}^u )$. The first vector is the genre categorization of
+movie $m$ and the second vector is the row of the above matrix for user $u$.
 Therefore, multiple ratings can be calculated by computing the product of two
 matrices:
 
@@ -246,15 +273,13 @@ matrices:
     $i$ of $U$ is for the user whose rating is desired for the corresponding row
     $i$ of $M$.
 
--   The product $U$ $\cdot$ $M^\intercal$ has the desired ratings on the
-    diagonal.
+-   The product $U$ $\cdot$ $M^\intercal$ has the average ratings on the
+    diagonal. Multiply by $\lambda_2$ to get the predicted ratings.
 
 This is essential for timely calculation of ratings, since R provides matrix
 algebra that is much faster than multiplying two vectors and summing the result.
 I wrote code that calculates roughly 10,000 ratings at a time. Despite this
-optimization, the calculation of 9 million ratings took roughly 80 minutes. For
-this reason, I did not use cross validation or regularization when buidling the
-genre model.
+optimization, the calculation of 9 million ratings took roughly 80 minutes.
 
 # Results
 
