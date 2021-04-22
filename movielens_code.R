@@ -124,9 +124,9 @@ val_or_0 <- function(x)
 # on a dataset.
 #
 
-### Regularized(Movie + User) Effects -------------------------------------
-model_reg_movie_user <- list(
-  name = "Regularized(Movie + User) Effects",
+### User + Regularized(Movie) Effects -------------------------------------
+model_user_reg_movie <- list(
+  name = "User + Regularized(Movie) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
@@ -137,7 +137,7 @@ model_reg_movie_user <- list(
     e_u <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
+      summarize(e_u = mean(rating - e_m - mu))
 
     predictfn <- function(dataset) {
       dataset %>%
@@ -150,9 +150,9 @@ model_reg_movie_user <- list(
   }
 )
 
-### Regularized(Movie + User + Year) Effects ------------------------------
-model_reg_movie_user_year <- list(
-  name = "Regularized(Movie + User + Year) Effects",
+### User + Regularized(Movie + Year) Effects ------------------------------
+model_user_reg_movie_year <- list(
+  name = "User + Regularized(Movie + Year) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
@@ -163,7 +163,7 @@ model_reg_movie_user_year <- list(
     e_u <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
+      summarize(e_u = mean(rating - e_m - mu))
 
     e_y <- dataset %>%
       left_join(e_m, by = "movieId") %>%
@@ -183,9 +183,9 @@ model_reg_movie_user_year <- list(
   }
 )
 
-### Age + Regularized(Movie + User) Effects -------------------------------
-model_age_reg_movie_user <- list(
-  name = "Age + Regularized(Movie + User) Effects",
+### Age + User + Regularized(Movie) Effects -------------------------------
+model_age_user_reg_movie <- list(
+  name = "Age + User + Regularized(Movie) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
@@ -196,7 +196,7 @@ model_age_reg_movie_user <- list(
     e_u <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
+      summarize(e_u = mean(rating - e_m - mu))
 
     e_a <- dataset %>%
       left_join(e_m, by = "movieId") %>%
@@ -216,9 +216,9 @@ model_age_reg_movie_user <- list(
   }
 )
 
-### Regularized(Movie + User + Age) Effects -------------------------------
-model_reg_movie_user_age <- list(
-  name = "Regularized(Movie + User + Age) Effects",
+### User + Regularized(Movie + Age) Effects -------------------------------
+model_user_reg_movie_age <- list(
+  name = "User + Regularized(Movie + Age) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
 
@@ -229,7 +229,7 @@ model_reg_movie_user_age <- list(
     e_u <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
+      summarize(e_u = mean(rating - e_m - mu))
 
     e_a <- dataset %>%
       left_join(e_m, by = "movieId") %>%
@@ -343,10 +343,10 @@ save(file = "ml-10M100K/cp01.RData",
 suppressWarnings(set.seed(10, sample.kind = "Rounding"))
 kfold_sets <- createFolds(edx$rating, k = 5)
 
-models <- list(model_reg_movie_user,
-               model_reg_movie_user_year,
-               model_age_reg_movie_user,
-               model_reg_movie_user_age)
+models <- list(model_user_reg_movie,
+               model_user_reg_movie_year,
+               model_age_user_reg_movie,
+               model_user_reg_movie_age)
 
 # For each model:
 model_results <- map_dfr(models, function(model) {
@@ -488,10 +488,16 @@ save(file = "ml-10M100K/cp03.RData",
 log_info("Checking the result of non-genre and genre models together.")
 
 genre_predictions <- genre_predictfn(edx_residuals)
-combined_predictions <- nongenre_predictions + genre_predictions
-combined_rmse <- rmse(combined_predictions, edx$rating)
 
-log_info(paste("Combined models: RMSE =", combined_rmse))
+genre_tuning <- map_dfr(seq(.1, 4, .1), function(x) {
+  combined_predictions <- nongenre_predictions + x * genre_predictions
+  tibble(lambda = x, rmse = rmse(combined_predictions, edx$rating))
+})
+
+tuning_index <- which.min(genre_tuning$rmse)
+log_info(paste("Best fit for combined models: lambda =", 
+               genre_tuning$lambda[tuning_index],
+               "RMSE =", genre_tuning$rmse[tuning_index]))
 
 remove(edx_residuals)
 
@@ -507,6 +513,7 @@ save(file = "ml-10M100K/cp04.RData",
      list = setdiff(ls(), ls(pattern = ".*log")))
 
 validation_predictions <- val_nongenre_predictions +
-  genre_predictfn(validation_residuals)
+  genre_tuning$lambda[tuning_index] * genre_predictfn(validation_residuals)
+
 validation_rmse <- rmse(validation_predictions, validation$rating)
 log_info(paste("Final RMSE is", validation_rmse))
