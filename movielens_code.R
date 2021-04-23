@@ -124,21 +124,21 @@ val_or_0 <- function(x)
 # on a dataset.
 #
 
-### User + Regularized(Movie) Effects -------------------------------------
-model_user_reg_movie <- list(
-  name = "User + Regularized(Movie) Effects",
+### Regularized(Movie + User) Effects -------------------------------------
+model_reg_movie_user <- list(
+  name = "Regularized(Movie + User) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
-
+    
     e_m <- dataset %>%
       group_by(movieId) %>%
       summarize(e_m = sum(rating - mu) / (n() + lambda))
-
+    
     e_u <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
-      summarize(e_u = mean(rating - e_m - mu))
-
+      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
+    
     predictfn <- function(dataset) {
       dataset %>%
         left_join(e_m, by = "movieId") %>%
@@ -150,27 +150,53 @@ model_user_reg_movie <- list(
   }
 )
 
-### User + Regularized(Movie + Year) Effects ------------------------------
-model_user_reg_movie_year <- list(
-  name = "User + Regularized(Movie + Year) Effects",
+### User + Regularized(Movie) Effects -------------------------------------
+model_user_reg_movie <- list(
+  name = "User + Regularized(Movie) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
-
+    
     e_m <- dataset %>%
       group_by(movieId) %>%
       summarize(e_m = sum(rating - mu) / (n() + lambda))
-
+    
     e_u <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
       summarize(e_u = mean(rating - e_m - mu))
+    
+    predictfn <- function(dataset) {
+      dataset %>%
+        left_join(e_m, by = "movieId") %>%
+        left_join(e_u, by = "userId") %>%
+        mutate(pred = mu + e_m + e_u) %>%
+        pull(pred)
+    }
+    return(list(predict = predictfn))
+  }
+)
 
+### Regularized(Movie + User + Year) Effects ------------------------------
+model_reg_movie_user_year <- list(
+  name = "Regularized(Movie + User + Year) Effects",
+  train = function(dataset, lambda) {
+    mu <- mean(dataset$rating)
+    
+    e_m <- dataset %>%
+      group_by(movieId) %>%
+      summarize(e_m = sum(rating - mu) / (n() + lambda))
+    
+    e_u <- dataset %>%
+      left_join(e_m, by = "movieId") %>%
+      group_by(userId) %>%
+      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
+    
     e_y <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       left_join(e_u, by = "userId") %>%
       group_by(year) %>%
       summarize(e_y = sum(rating - e_u - e_m - mu) / (n() + lambda))
-
+    
     predictfn <- function(dataset) {
       dataset %>%
         left_join(e_m, by = "movieId") %>%
@@ -183,27 +209,126 @@ model_user_reg_movie_year <- list(
   }
 )
 
-### Age + User + Regularized(Movie) Effects -------------------------------
-model_age_user_reg_movie <- list(
-  name = "Age + User + Regularized(Movie) Effects",
+### User + Regularized(Movie + Year) Effects ------------------------------
+model_user_reg_movie_year <- list(
+  name = "User + Regularized(Movie + Year) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
-
+    
     e_m <- dataset %>%
       group_by(movieId) %>%
       summarize(e_m = sum(rating - mu) / (n() + lambda))
-
+    
     e_u <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
       summarize(e_u = mean(rating - e_m - mu))
+    
+    e_y <- dataset %>%
+      left_join(e_m, by = "movieId") %>%
+      left_join(e_u, by = "userId") %>%
+      group_by(year) %>%
+      summarize(e_y = sum(rating - e_u - e_m - mu) / (n() + lambda))
+    
+    predictfn <- function(dataset) {
+      dataset %>%
+        left_join(e_m, by = "movieId") %>%
+        left_join(e_u, by = "userId") %>%
+        left_join(e_y, by = "year") %>%
+        mutate(pred = mu + e_m + e_u + val_or_0(e_y)) %>%
+        pull(pred)
+    }
+    return(list(predict = predictfn))
+  }
+)
 
+### Age + Regularized(Movie + User) Effects -------------------------------
+model_age_reg_movie_user <- list(
+  name = "Age + Regularized(Movie + User) Effects",
+  train = function(dataset, lambda) {
+    mu <- mean(dataset$rating)
+    
+    e_m <- dataset %>%
+      group_by(movieId) %>%
+      summarize(e_m = sum(rating - mu) / (n() + lambda))
+    
+    e_u <- dataset %>%
+      left_join(e_m, by = "movieId") %>%
+      group_by(userId) %>%
+      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
+    
     e_a <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       left_join(e_u, by = "userId") %>%
       group_by(age) %>%
       summarize(e_a = mean(rating - e_u - e_m - mu))
+    
+    predictfn <- function(dataset) {
+      dataset %>%
+        left_join(e_m, by = "movieId") %>%
+        left_join(e_u, by = "userId") %>%
+        left_join(e_a, by = "age") %>%
+        mutate(pred = mu + e_m + e_u + val_or_0(e_a)) %>%
+        pull(pred)
+    }
+    return(list(predict = predictfn))
+  }
+)
 
+### Age + User + Regularized(Movie) Effects -------------------------------
+model_age_user_reg_movie <- list(
+  name = "Age + User + Regularized(Movie) Effects",
+  train = function(dataset, lambda) {
+    mu <- mean(dataset$rating)
+    
+    e_m <- dataset %>%
+      group_by(movieId) %>%
+      summarize(e_m = sum(rating - mu) / (n() + lambda))
+    
+    e_u <- dataset %>%
+      left_join(e_m, by = "movieId") %>%
+      group_by(userId) %>%
+      summarize(e_u = mean(rating - e_m - mu))
+    
+    e_a <- dataset %>%
+      left_join(e_m, by = "movieId") %>%
+      left_join(e_u, by = "userId") %>%
+      group_by(age) %>%
+      summarize(e_a = mean(rating - e_u - e_m - mu))
+    
+    predictfn <- function(dataset) {
+      dataset %>%
+        left_join(e_m, by = "movieId") %>%
+        left_join(e_u, by = "userId") %>%
+        left_join(e_a, by = "age") %>%
+        mutate(pred = mu + e_m + e_u + val_or_0(e_a)) %>%
+        pull(pred)
+    }
+    return(list(predict = predictfn))
+  }
+)
+
+### Regularized(Movie + User + Age) Effects -------------------------------
+model_reg_movie_user_age <- list(
+  name = "Regularized(Movie + User + Age) Effects",
+  train = function(dataset, lambda) {
+    mu <- mean(dataset$rating)
+    
+    e_m <- dataset %>%
+      group_by(movieId) %>%
+      summarize(e_m = sum(rating - mu) / (n() + lambda))
+    
+    e_u <- dataset %>%
+      left_join(e_m, by = "movieId") %>%
+      group_by(userId) %>%
+      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
+    
+    e_a <- dataset %>%
+      left_join(e_m, by = "movieId") %>%
+      left_join(e_u, by = "userId") %>%
+      group_by(age) %>%
+      summarize(e_a = sum(rating - e_u - e_m - mu) / (n() + lambda))
+    
     predictfn <- function(dataset) {
       dataset %>%
         left_join(e_m, by = "movieId") %>%
@@ -221,22 +346,22 @@ model_user_reg_movie_age <- list(
   name = "User + Regularized(Movie + Age) Effects",
   train = function(dataset, lambda) {
     mu <- mean(dataset$rating)
-
+    
     e_m <- dataset %>%
       group_by(movieId) %>%
       summarize(e_m = sum(rating - mu) / (n() + lambda))
-
+    
     e_u <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       group_by(userId) %>%
       summarize(e_u = mean(rating - e_m - mu))
-
+    
     e_a <- dataset %>%
       left_join(e_m, by = "movieId") %>%
       left_join(e_u, by = "userId") %>%
       group_by(age) %>%
       summarize(e_a = sum(rating - e_u - e_m - mu) / (n() + lambda))
-
+    
     predictfn <- function(dataset) {
       dataset %>%
         left_join(e_m, by = "movieId") %>%
@@ -343,10 +468,14 @@ save(file = "ml-10M100K/cp01.RData",
 suppressWarnings(set.seed(10, sample.kind = "Rounding"))
 kfold_sets <- createFolds(edx$rating, k = 5)
 
-models <- list(model_user_reg_movie,
+models <- list(model_reg_movie_user,
+               model_user_reg_movie,
+               model_reg_movie_user_year,
                model_user_reg_movie_year,
+               model_age_reg_movie_user,
                model_age_user_reg_movie,
-               model_user_reg_movie_age)
+               model_user_reg_movie_age,
+               model_reg_movie_user_age)
 
 # For each model:
 model_results <- map_dfr(models, function(model) {
