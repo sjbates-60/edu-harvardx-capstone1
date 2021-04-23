@@ -18,6 +18,11 @@ require(gridExtra)
 require(lubridate)
 
 load("ml-10M100K/movielens_report.RData")
+
+# How much did model i improve over model j?
+improv <- function(i, j, sig) {
+  round(100 * (1 - (model_results$RMSE[i] / model_results$RMSE[j])), sig)
+}
 ```
 
 # Overview
@@ -252,11 +257,11 @@ I calculated the terms in two steps:
 
 The result is a matrix with 69,878 rows and 20 columns: 1 row for each user and
 1 column for each genre. The rating for a movie is then computed by summing the
-values in a row that correspond to the movie's genres.
-
-I also included a tuning factor in the model. Since the $e_g^u$ terms are
-averages, I calculated the RMSE for $\lambda_2 \cdot \sum e_g^u$ for values of
-$\lambda_2$ in a range, and chose the one that produced the lowest RMSE.
+values in a row that correspond to the movie's genres. When I tested this, the
+simple sum gave lower ratings than the actual ratings, so I introduced a tuning
+factor $\lambda_2$. I then calculated the RMSE for
+$\lambda_2 \cdot \hat{Y}_{m,u}$ for values of $\lambda_2$ in a range, and chose
+the value of $\lambda_2$ that produced the lowest RMSE on the training set.
 
 To compute $\hat{Y}_{m,u}$ efficiently, note that the sum above can be rewritten
 as the dot product of the vectors $(x_m^1, \ldots , x_m^{20})$ and
@@ -279,20 +284,36 @@ matrices:
 This is essential for timely calculation of ratings, since R provides matrix
 algebra that is much faster than multiplying two vectors and summing the result.
 I wrote code that calculates roughly 10,000 ratings at a time. Despite this
-optimization, the calculation of 9 million ratings took roughly 80 minutes.
+optimization, calculating the genre-based ratings took almost 3,000 times as
+long as calculating the non-genre-based ratings.
 
 # Results
 
-The models using only non-genre variables all returned very similar results, as
-shown in Table 4. Including the age of the movie yielded a slight improvement of
-roughly 1%. In contrast, including the genre variables led to an improvement of
-over 5%.
+The models using only non-genre variables all returned very similar results.
+Table 4 shows the model name, the optimal tuning value $\lambda$, and the RMSE
+on the training set. Examining the models in the pairs described in the methods
+section above, I found that the model where the user effect was not regularized
+performed slightly better than the modeI where the user effect was regularized.
+The improvement in each case was very small, however. The models that performed
+best included movie, user, and age effects. These still showed at most a
+`r improv(6, 1, 1)`% improvement over the model with only movie and user
+effects.
 
-```{r model-results}
-knitr::kable(model_results,
-             digits = 5,
+```{r nongenre-model-results}
+knitr::kable(model_results[1:8, c(1,2,4)],
+             digits = 6,
              col.names = c("Model name", "$\\lambda$", "RMSE"),
-             caption = "Results of models executed on the training set")
+             caption = "Results of non-genre models on the training set")
+```
+
+Adding the genre effects with $\lambda_2 = 1.8$ to the best non-genre model did
+produce a significant improvement, however, of `r improv(9, 6, 1)`%.
+
+```{r genre-model-results}
+knitr::kable(model_results[9, ],
+             digits = 6,
+             col.names = c("Model name", "$\\lambda$", "$\\lambda_2$", "RMSE"),
+             caption = "Result of combined models on the training set")
 ```
 
 # Conclusion
