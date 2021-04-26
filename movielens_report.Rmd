@@ -299,6 +299,7 @@ best included movie, user, and age effects. These still showed at most a
 effects.
 
 ```{r nongenre-model-results}
+movie_results <- readRDS("model_results.rds")
 knitr::kable(model_results[1:8, c(1,2,4)],
              digits = 6,
              col.names = c("Model name", "$\\lambda$", "RMSE"),
@@ -306,7 +307,7 @@ knitr::kable(model_results[1:8, c(1,2,4)],
 ```
 
 Adding the genre effects with $\lambda_2 = 1.8$ to the best non-genre model did
-produce a significant improvement, however, of `r improv(9, 6, 1)`% (Table 5).
+produce a significant improvement, however, of `r improv(9, 6, 1)`%.
 
 ```{r genre-model-results}
 knitr::kable(model_results[9, ],
