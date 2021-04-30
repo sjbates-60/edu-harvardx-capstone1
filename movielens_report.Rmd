@@ -15,8 +15,12 @@ knitr::opts_knit$set(eval.after = "fig.cap")
 
 require(tidyverse)
 require(lubridate)
+require(kableExtra)
 
+# The following file contains the ratings and movies tables.
 load("ml-10M100K/movielens_report.RData")
+
+model_results <- readRDS("model_results.rds")
 
 # How much did model i improve over model j?
 improv <- function(i, j, sig) {
@@ -28,10 +32,12 @@ improv <- function(i, j, sig) {
 
 In this report, I describe my exploration of a dataset of movie ratings made by
 many people over the course of fourteen years, and my construction of several
-models for predicting ratings for specific movies by specific people. To test
-the models, I used 90% of the ratings and compared their accuracy of their
-predictions. Once I had chosen a final model, I used it to predict the ratings
-on the final 10% of the ratings and reported how well it succeeded.
+models for predicting ratings for specific movies by specific people.The models
+were constructed from and tested on a training set containing 90% of the
+ratings. The remaining 10% of the ratings were held out in a validation set,
+which was not used until I had selected a final model among those I constructed.
+I report how well the final model succeeded in predicting the ratings in the
+validation set.
 
 # Exploration
 
@@ -58,7 +64,7 @@ percents <- ratings %>%
   summarize(num_ratings = n()) %>% 
   pull(num_ratings) %>%
   quantile(probs = seq(0, 1, .1))
-knitr::kable(t(percents), 
+knitr::kable(t(percents), booktabs = T,
              caption = "Number of movies rated by users")
 
 high_percents <- ratings %>% 
@@ -66,7 +72,7 @@ high_percents <- ratings %>%
   summarize(num_ratings = n()) %>% 
   pull(num_ratings) %>%
   quantile(probs = seq(.9, 1, .01))
-knitr::kable(t(high_percents), 
+knitr::kable(t(high_percents), booktabs = T,
              caption = "Number of movies rated by high-volume users")
 
 rm(percents, high_percents)
@@ -149,13 +155,13 @@ facilitate analysis.
 
 -   The `genres` field is a list of `|`-separated genres. There are 19 different
     genres, plus a "(no genre specified)" option. These are separated into 20
-    variables, each named for a genre. To make a more compact display, I
-    abbreviated each genre to two characters. A genre variable contains a 1 if
-    the movie has the variable name in its `genres` variable, and a 0 otherwise.
+    variables, each named for a genre. A genre variable contains a 1 if the
+    movie has the variable name in its `genres` variable, and a 0 otherwise.
 
 The `ratings.dat` table has a `timestamp` variable that is a second count from
-the epoch. I converted it into a `POSIXct` variable so that the time between a
-movie's release year and a rating's creation time can be calculated.
+12:00 am on January 1, 1970. I converted it into a `POSIXct` variable so that
+the time between a movie's release year and a rating's creation time can be
+calculated.
 
 I created a training set containing 9,000,055 ratings and a validation set
 containing 999,999 ratings. All exploration and modelling was done exclusively
@@ -224,12 +230,18 @@ summary <- data.frame(all_genres[1:5], abbrevs[1:5, 1],
                       all_genres[6:10], abbrevs[6:10, 1],
                       all_genres[11:15], abbrevs[11:15, 1],
                       all_genres[16:20], abbrevs[16:20, 1])
-knitr::kable(summary, col.names = c("Genre", "Abbr.",
-                                "Genre", "Abbr.",
-                                "Genre", "Abbr.",
-                                "Genre", "Abbr."),
-             caption = "The twenty movie genres and their abbreviations.")
-
+knitr::kable(summary, 
+             col.names = c("Genre", "Abbr.",
+                           "Genre", "Abbr.",
+                           "Genre", "Abbr.",
+                           "Genre", "Abbr."),
+             caption = "The twenty movie genres and their abbreviations.",
+             booktabs = T) %>%
+  column_spec(2, border_right = T) %>%
+  column_spec(4, border_right = T) %>%
+  column_spec(6, border_right = T) %>%
+  kable_styling(latex_options = "hold_position")
+ 
 ```
 
 Mathematically, the model can be written as
@@ -262,8 +274,8 @@ factor $\lambda_2$. I then calculated the RMSE for
 $\lambda_2 \cdot \hat{Y}_{m,u}$ for values of $\lambda_2$ in a range, and chose
 the value of $\lambda_2$ that produced the lowest RMSE on the training set.
 
-To compute $\hat{Y}_{m,u}$ efficiently, note that the sum above can be rewritten
-as the dot product of the vectors $(x_m^1, \ldots , x_m^{20})$ and
+To compute $\hat{Y}_{m,u}$ efficiently, I noted that the sum above can be
+rewritten as the dot product of the vectors $(x_m^1, \ldots , x_m^{20})$ and
 $(e_1^u , \ldots , e_{20}^u )$. The first vector is the genre categorization of
 movie $m$ and the second vector is the row of the above matrix for user $u$.
 Therefore, multiple ratings can be calculated by computing the product of two
@@ -289,7 +301,7 @@ as calculating the non-genre-based ratings.
 # Results
 
 The models using only non-genre variables all returned very similar results.
-Table 4 shows the model name, the optimal tuning value $\lambda$, and the RMSE
+Table 4 shows each model name, the optimal tuning value $\lambda$, and the RMSE
 on the training set. Examining the models in the pairs described in the methods
 section above, I found that the model where the user effect was not regularized
 performed slightly better than the modeI where the user effect was regularized.
@@ -299,32 +311,49 @@ best included movie, user, and age effects. These still showed at most a
 effects.
 
 ```{r nongenre-model-results}
-movie_results <- readRDS("model_results.rds")
 knitr::kable(model_results[1:8, c(1,2,4)],
+             booktabs = T,
+             linesep = "",
              digits = 6,
              col.names = c("Model name", "$\\lambda$", "RMSE"),
-             caption = "Results of non-genre models on the training set")
+             escape = FALSE,
+             caption = "Results of non-genre models on the training set") %>%
+  kable_styling(latex_options = c("striped"),
+                stripe_index = c(1, 2, 5, 6))
 ```
 
-Adding the genre effects with $\lambda_2 = 1.8$ to the best non-genre model did
-produce a significant improvement, however, of `r improv(9, 6, 1)`%.
+Adding the genre effects with $\lambda_2 = 1.8$ to the best non-genre model
+substantially reduced the RMSE to `r round(model_results[9, "RMSE"], 5)` (Table
+5), an improvement of `r improv(9, 6, 1)`%. Finally, combining the two models
+and running them on the validation set yielded an RMSE value of
+`r round(model_results[10, "RMSE"], 5)`.
 
 ```{r genre-model-results}
 knitr::kable(model_results[9, ],
              digits = 6,
-             col.names = c("Model name", "$\\lambda$", "$\\lambda_2$", "RMSE"),
+             booktabs = T,
+             escape = FALSE,
+             col.names = c("Model name", "$\\lambda$", "$\\lambda_2$", 
+                           "RMSE"),
              caption = "Result of combined models on the training set")
 ```
 
-Finally, combining the two models and running them on the validation set yielded
-an RMSE value of `r round(model_results[10, "RMSE"], 6)`.
-
 # Conclusion
 
-Modelling only good for static analysis. To make it a recommendation system, I
-would need to keep more data on each user. Minimally, this would be the number
-of ratings for each user and genre, so that the average ratings could be
-appropiately updated when a user rates a new movie.
+The preceding analysis shows that movie ratings can be reasonably modelled by a
+linear combination of user and movie variables. Determining the effect of
+individual genres is especially important, as it allows a rating to be predicted
+for a movie whose combination of genres has not been previously rated by a user.
 
-Limits due to data? Maybe show how variable a user can be within genre
-combinations?
+One limitation of my analysis was that I used a single tuning parameter to
+regularize all variables in the non-genre models. Using a separate tuning
+parameter for each regularized variable may have improved performance. My code
+optimized the single tuning parameter by checking 33 values in the range [0, 8]
+for each of 5 cross validation folds, and took 20 - 25 minutes per model. Each
+additional tuning parameter would multiply the time by 33, so using two tuning
+parameters would have increased it to between 11 and 14 hours per model, and
+using three would have increased it to between 15 and 19 days per model. I
+looked at the largest and smallest RMSE values found for each fold for one of
+the models with three regularized variables, and discovered that they differed
+by less than .005. I feel confident, therefore, that using multiple tuning
+parameters would not yield any significant improvement.
