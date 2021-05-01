@@ -80,11 +80,11 @@ rm(percents, high_percents)
 
 I present three plots to motivate the use of the different variables in
 modelling ratings. Figure 1 shows that there is a positive correlation between a
-movie's average rating and the number of times it was rated. This make intuitive
-sense; more people will tend to go to movies that they hear have good reviews.
-Figure 2 shows that there is a negative correlation between a user's average
-rating and the number of movies rated by that user. One can imagine that such a
-user is harder to impress, having seen so many movies.
+movie's average rating and the number of times it was rated. This makes
+intuitive sense; more people will tend to go to movies that they hear have good
+reviews. Figure 2 shows that there is a negative correlation between a user's
+average rating and the number of movies rated by that user. One can imagine that
+such a user is harder to impress, having seen so many movies.
 
 ```{r movie-correlation, fig.height=1.6, fig.cap=movie_caption}
 movie_stats <- ratings %>% group_by(movieId)
@@ -147,16 +147,17 @@ ratings %>%
 
 ## Data Wrangling
 
-The `movie.dat` table has two variables that were pulled apart in order to
+The `movies.dat` table has two variables that were pulled apart in order to
 facilitate analysis.
 
 -   The release year is contained in the `title` variable. This was separated
     into a new `year` variable in order to model the effect of time on ratings.
 
--   The `genres` field is a list of `|`-separated genres. There are 19 different
-    genres, plus a "(no genre specified)" option. These are separated into 20
-    variables, each named for a genre. A genre variable contains a 1 if the
-    movie has the variable name in its `genres` variable, and a 0 otherwise.
+-   The `genres` variable is a list of `|`-separated genres. There are 19
+    different genres, plus a "(no genre specified)" option. The variable was
+    separated into 20 variables, each named for a genre. A genre variable
+    contains a 1 if the movie has the variable name in its `genres` variable,
+    and a 0 otherwise.
 
 The `ratings.dat` table has a `timestamp` variable that is a second count from
 12:00 am on January 1, 1970. I converted it into a `POSIXct` variable so that
@@ -169,7 +170,7 @@ on the training set.
 
 My exploration was done in two phases. In the first phase, I tested models that
 excluded the genres of the movies. In the second phase, I subtracted the best
-model's predicted values from the actual values, and created genre variables to
+model's predicted values from the actual values, and used the genre variables to
 model the result.
 
 ## Models without Genre
@@ -210,12 +211,12 @@ entire training set.
 ## Models with Genre
 
 The second phase was to explore the effects of genre after removing the best
-estimate from the first phase. Again, I chose a linear combination of genre
-variables as the model. To get the genre variables, I separated the `genres`
-variable into 20 separate variables, one for each of the genres in Table 3. For
-display purposes, I abbreviated each genre to two characters. Each genre
-variable has a value of 1 if the genre appears in the movie's `genres` variable
-and has a value of 0 otherwise.
+estimate from the first phase. Again, I chose a linear combination of variables
+for the model. As described above, I separated the `genres` variable into 20
+separate variables, one for each of the genres in Table 3. For display purposes,
+I abbreviated each genre to two characters. Each genre variable has a value of 1
+if the genre appears in the movie's `genres` variable and has a value of 0
+otherwise.
 
 ```{r genres-table}
 all_genres <- unique(unlist(sapply(movies$genres,
@@ -251,8 +252,9 @@ $$
 $$
 
 where $m$ is a movie, $u$ is a user, and $x_m^g$ is the genre variable described
-above. The exploration then becomes a calculation of the term $e_g^u$, the
-effect of genre $g$ on user $u$, for each user and genre.
+above. Constructing the model is then equivalent to calculating the term
+$e_g^u$, the effect of genre $g$ on ratings by user $u$, for each user and
+genre.
 
 I calculated the terms in two steps:
 
@@ -292,9 +294,9 @@ matrices:
 -   The product $U$ $\cdot$ $M^\intercal$ has the average ratings on the
     diagonal. Multiply by $\lambda_2$ to get the predicted ratings.
 
-This is essential for timely calculation of ratings, since R provides matrix
-algebra that is much faster than multiplying two vectors and summing the result.
-I wrote code that calculates roughly 10,000 ratings at a time. Despite this
+This is essential for timely calculation of ratings, since R's matrix algebra
+operators are much faster than multiplying two vectors and summing the result. I
+wrote code that calculates roughly 10,000 ratings at a time. Despite this
 optimization, calculating the genre-based ratings took almost 600 times as long
 as calculating the non-genre-based ratings.
 
@@ -305,10 +307,10 @@ Table 4 shows each model name, the optimal tuning value $\lambda$, and the RMSE
 on the training set. Examining the models in the pairs described in the methods
 section above, I found that the model where the user effect was not regularized
 performed slightly better than the modeI where the user effect was regularized.
-The improvement in each case was very small, however. The models that performed
-best included movie, user, and age effects. These still showed at most a
-`r improv(6, 1, 1)`% improvement over the model with only movie and user
-effects.
+(The pairs are indicated by the striping in Table 4.) The improvement in each
+case was very small, however. The models that performed best included movie,
+user, and age effects. These still showed at most a `r improv(6, 1, 1)`%
+improvement over the model with only movie and user effects.
 
 ```{r nongenre-model-results}
 knitr::kable(model_results[1:8, c(1,2,4)],
@@ -341,9 +343,10 @@ knitr::kable(model_results[9, ],
 # Conclusion
 
 The preceding analysis shows that movie ratings can be reasonably modelled by a
-linear combination of user and movie variables. Determining the effect of
-individual genres is especially important, as it allows a rating to be predicted
-for a movie whose combination of genres has not been previously rated by a user.
+linear combination of user, movie, and genre variables. Determining the effect
+of individual genres on a user's rating is especially important, as it allows a
+rating to be predicted for a movie whose combination of genres has not been
+previously rated by a user.
 
 One limitation of my analysis was that I used a single tuning parameter to
 regularize all variables in the non-genre models. Using a separate tuning
