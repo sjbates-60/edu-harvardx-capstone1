@@ -20,12 +20,8 @@ require(kableExtra)
 # The following file contains the ratings and movies tables.
 load("ml-10M100K/movielens_report.RData")
 
-model_results <- readRDS("model_results.rds")
-
-# How much did model i improve over model j?
-improv <- function(i, j, sig) {
-  round(100 * (1 - (model_results$RMSE[i] / model_results$RMSE[j])), sig)
-}
+nongenre_results <- readRDS("nongenre_results.rds")
+combined_results <- readRDS("combined_results.RDS")
 ```
 
 # Overview
@@ -310,18 +306,34 @@ as calculating the non-genre-based ratings.
 
 # Results
 
+```{r improvements}
+# How much did RMSE 2 improve over RMSE 1?
+improv <- function(rmse1, rmse2, sig) {
+  round(100 * (1 - (rmse2 / rmse1)), sig)
+}
+
+nongenre_improv <- improv(first(nongenre_results$RMSE),
+                          last(nongenre_results$RMSE),
+                          1)
+genre_improv <- improv(last(nongenre_results$RMSE),
+                       first(combined_results$RMSE),
+                       1)
+
+```
+
 The models using only non-genre variables all returned very similar results.
 Table 4 shows each model name, the optimal tuning value $\lambda$, and the RMSE
-on the training set. Examining the models in the pairs described in the methods
-section above, I found that the model where the user effect was not regularized
-performed slightly better than the modeI where the user effect was regularized.
-(The pairs are indicated by the striping in Table 4.) The improvement in each
-case was very small, however. The models that performed best included movie,
-user, and age effects. These still showed at most a `r improv(6, 1, 1)`%
-improvement over the model with only movie and user effects.
+on the training set, listed in order of descending RMSE. Examining the models in
+the pairs described in the methods section above, I found that the model where
+the user effect was not regularized performed slightly better than the modeI
+where the user effect was regularized. (The pairs are indicated by the striping
+in Table 4.) The improvement in each case was very small, however. The models
+that performed best included movie, user, and age effects. These still showed at
+most a `r nongenre_improv`% improvement over the model with only movie and user
+effects.
 
 ```{r nongenre-model-results}
-knitr::kable(model_results[1:8, c(1,2,4)],
+knitr::kable(nongenre_results,
              booktabs = T,
              linesep = "",
              digits = 6,
@@ -333,13 +345,13 @@ knitr::kable(model_results[1:8, c(1,2,4)],
 ```
 
 Adding the genre effects with $\lambda_2 = 1.8$ to the best non-genre model
-substantially reduced the RMSE to `r round(model_results[9, "RMSE"], 5)` (Table
-5), an improvement of `r improv(9, 6, 1)`%. Finally, combining the two models
-and running them on the validation set yielded an RMSE value of
-`r round(model_results[10, "RMSE"], 5)`.
+substantially reduced the RMSE to `r round(first(combined_results$RMSE), 5)`
+(Table 5), an improvement of `r genre_improv`%. Finally, combining the two
+models and running them on the validation set yielded an RMSE value of
+`r round(last(combined_results$RMSE), 5)`.
 
 ```{r genre-model-results}
-knitr::kable(model_results[9, ],
+knitr::kable(combined_results[1, ],
              digits = 6,
              booktabs = T,
              escape = FALSE,
