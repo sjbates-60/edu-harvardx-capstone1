@@ -114,6 +114,107 @@ val_or_0 <- function(x)
   ifelse(!is.na(x), x, 0)
 
 
+## Model generators -------------------------------------------------------
+# The following two functions generate models that are tested by cross
+# validation. The model structure is described following the generator
+# functions.
+
+# Generates a model that is a linear combination of two variables.
+# Parameters:
+#   model_name - the name of the model
+#   var1       - the name of the first variable
+#   reg1       - TRUE if the first variable should be regularized,
+#                FALSE otherwise
+#   var2       - the name of the second variable
+#   reg2       - TRUE if the second variable should be regularized,
+#                FALSE otherwise
+#
+model_2var_gen <- function(model_name, 
+                           var1, reg1, var2, reg2) {
+  list(
+    name = model_name,
+    train = function(dataset, lambda) {
+      mu <- mean(dataset$rating)
+      
+      e1 <- dataset %>%
+        group_by(across(var1)) %>%
+        summarize(e1 = ifelse(reg1,
+                              sum(rating - mu) / (n() + lambda),
+                              mean(rating - mu)))
+      
+      e2 <- dataset %>%
+        left_join(e1, by = all_of(var1)) %>%
+        group_by(across(var2)) %>%
+        summarize(e2 = ifelse(reg2,
+                              sum(rating - mu - e1) / (n() + lambda),
+                              mean(rating - mu - e1)))
+      
+      predictfn <- function(dataset) {
+        dataset %>%
+          left_join(e1, by = all_of(var1)) %>%
+          left_join(e2, by = all_of(var2)) %>%
+          mutate(pred = mu + val_or_0(e1) + val_or_0(e2)) %>%
+          pull(pred)
+      }
+      return(list(predict = predictfn))
+    }
+  )
+}
+
+# Generates a model that is a linear combination of three variables.
+# Parameters:
+#   model_name - the name of the model
+#   var1       - the name of the first variable
+#   reg1       - TRUE if the first variable should be regularized,
+#                FALSE otherwise
+#   var2       - the name of the second variable
+#   reg2       - TRUE if the second variable should be regularized,
+#                FALSE otherwise
+#   var3       - the name of the third variable
+#   reg3       - TRUE if the third variable should be regularized,
+#                FALSE otherwise
+#
+model_3var_gen <- function(model_name, 
+                           var1, reg1, var2, reg2, var3, reg3) {
+  list(
+    name = model_name,
+    train = function(dataset, lambda) {
+      mu <- mean(dataset$rating)
+      
+      e1 <- dataset %>%
+        group_by(across(var1)) %>%
+        summarize(e1 = ifelse(reg1,
+                              sum(rating - mu) / (n() + lambda),
+                              mean(rating - mu)))
+      
+      e2 <- dataset %>%
+        left_join(e1, by = all_of(var1)) %>%
+        group_by(across(var2)) %>%
+        summarize(e2 = ifelse(reg2,
+                              sum(rating - mu - e1) / (n() + lambda),
+                              mean(rating - mu - e1)))
+      
+      e3 <- dataset %>%
+        left_join(e1, by = all_of(var1)) %>%
+        left_join(e2, by = all_of(var2)) %>%
+        group_by(across(var3)) %>%
+        summarize(e3 = ifelse(reg3,
+                              sum(rating - mu - e1 - e2) / (n() + lambda),
+                              mean(rating - mu - e1 - e2)))
+      
+      predictfn <- function(dataset) {
+        dataset %>%
+          left_join(e1, by = all_of(var1)) %>%
+          left_join(e2, by = all_of(var2)) %>%
+          left_join(e3, by = all_of(var3)) %>%
+          mutate(pred = mu + val_or_0(e1) + val_or_0(e2) + val_or_0(e3)) %>%
+          pull(pred)
+      }
+      return(list(predict = predictfn))
+    }
+  )
+}
+
 ## Model structure --------------------------------------------------------
 # Each of the following objects contains a model used to predict
 # movie ratings. Each object is a list containing two elements:
@@ -125,254 +226,54 @@ val_or_0 <- function(x)
 #
 
 ### Regularized(Movie + User) Effects -------------------------------------
-model_reg_movie_user <- list(
-  name = "Regularized(Movie + User) Effects",
-  train = function(dataset, lambda) {
-    mu <- mean(dataset$rating)
-
-    e_m <- dataset %>%
-      group_by(movieId) %>%
-      summarize(e_m = sum(rating - mu) / (n() + lambda))
-
-    e_u <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      group_by(userId) %>%
-      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
-
-    predictfn <- function(dataset) {
-      dataset %>%
-        left_join(e_m, by = "movieId") %>%
-        left_join(e_u, by = "userId") %>%
-        mutate(pred = mu + e_m + e_u) %>%
-        pull(pred)
-    }
-    return(list(predict = predictfn))
-  }
-)
+model_reg_movie_user <- model_2var_gen(
+  "Regularized(Movie + User) Effects",
+  "movieId", TRUE, "userId", TRUE)
 
 ### User + Regularized(Movie) Effects -------------------------------------
-model_user_reg_movie <- list(
-  name = "User + Regularized(Movie) Effects",
-  train = function(dataset, lambda) {
-    mu <- mean(dataset$rating)
-
-    e_m <- dataset %>%
-      group_by(movieId) %>%
-      summarize(e_m = sum(rating - mu) / (n() + lambda))
-
-    e_u <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      group_by(userId) %>%
-      summarize(e_u = mean(rating - e_m - mu))
-
-    predictfn <- function(dataset) {
-      dataset %>%
-        left_join(e_m, by = "movieId") %>%
-        left_join(e_u, by = "userId") %>%
-        mutate(pred = mu + e_m + e_u) %>%
-        pull(pred)
-    }
-    return(list(predict = predictfn))
-  }
-)
+model_user_reg_movie <- model_2var_gen(
+  "User + Regularized(Movie) Effects",
+  "movieId", TRUE, "userId", FALSE)
 
 ### Regularized(Movie + User + Year) Effects ------------------------------
-model_reg_movie_user_year <- list(
-  name = "Regularized(Movie + User + Year) Effects",
-  train = function(dataset, lambda) {
-    mu <- mean(dataset$rating)
-
-    e_m <- dataset %>%
-      group_by(movieId) %>%
-      summarize(e_m = sum(rating - mu) / (n() + lambda))
-
-    e_u <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      group_by(userId) %>%
-      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
-
-    e_y <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      left_join(e_u, by = "userId") %>%
-      group_by(year) %>%
-      summarize(e_y = sum(rating - e_u - e_m - mu) / (n() + lambda))
-
-    predictfn <- function(dataset) {
-      dataset %>%
-        left_join(e_m, by = "movieId") %>%
-        left_join(e_u, by = "userId") %>%
-        left_join(e_y, by = "year") %>%
-        mutate(pred = mu + e_m + e_u + val_or_0(e_y)) %>%
-        pull(pred)
-    }
-    return(list(predict = predictfn))
-  }
-)
+model_reg_movie_user_year <- model_3var_gen(
+  "Regularized(Movie + User + Year) Effects",
+  "movieId", TRUE, "userId", TRUE, "year", TRUE)
 
 ### User + Regularized(Movie + Year) Effects ------------------------------
-model_user_reg_movie_year <- list(
-  name = "User + Regularized(Movie + Year) Effects",
-  train = function(dataset, lambda) {
-    mu <- mean(dataset$rating)
+model_user_reg_movie_year <- model_3var_gen(
+  "User + Regularized(Movie + Year) Effects",
+  "movieId", TRUE, "userId", FALSE, "year", TRUE)
 
-    e_m <- dataset %>%
-      group_by(movieId) %>%
-      summarize(e_m = sum(rating - mu) / (n() + lambda))
+### Regularized(Movie + User) + Year Effects ------------------------------
+model_year_reg_movie_user <- model_3var_gen(
+  "Regularized(Movie + User) + Year Effects",
+  "movieId", TRUE, "userId", TRUE, "year", FALSE)
 
-    e_u <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      group_by(userId) %>%
-      summarize(e_u = mean(rating - e_m - mu))
-
-    e_y <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      left_join(e_u, by = "userId") %>%
-      group_by(year) %>%
-      summarize(e_y = sum(rating - e_u - e_m - mu) / (n() + lambda))
-
-    predictfn <- function(dataset) {
-      dataset %>%
-        left_join(e_m, by = "movieId") %>%
-        left_join(e_u, by = "userId") %>%
-        left_join(e_y, by = "year") %>%
-        mutate(pred = mu + e_m + e_u + val_or_0(e_y)) %>%
-        pull(pred)
-    }
-    return(list(predict = predictfn))
-  }
-)
+### User + Regularized(Movie) + Year Effects ------------------------------
+model_user_year_reg_movie <- model_3var_gen(
+  "User + Regularized(Movie) + Year Effects",
+  "movieId", TRUE, "userId", FALSE, "year", FALSE)
 
 ### Age + Regularized(Movie + User) Effects -------------------------------
-model_age_reg_movie_user <- list(
-  name = "Age + Regularized(Movie + User) Effects",
-  train = function(dataset, lambda) {
-    mu <- mean(dataset$rating)
-
-    e_m <- dataset %>%
-      group_by(movieId) %>%
-      summarize(e_m = sum(rating - mu) / (n() + lambda))
-
-    e_u <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      group_by(userId) %>%
-      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
-
-    e_a <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      left_join(e_u, by = "userId") %>%
-      group_by(age) %>%
-      summarize(e_a = mean(rating - e_u - e_m - mu))
-
-    predictfn <- function(dataset) {
-      dataset %>%
-        left_join(e_m, by = "movieId") %>%
-        left_join(e_u, by = "userId") %>%
-        left_join(e_a, by = "age") %>%
-        mutate(pred = mu + e_m + e_u + val_or_0(e_a)) %>%
-        pull(pred)
-    }
-    return(list(predict = predictfn))
-  }
-)
+model_age_reg_movie_user <- model_3var_gen(
+  "Age + Regularized(Movie + User) Effects",
+  "movieId", TRUE, "userId", TRUE, "age", FALSE)
 
 ### Age + User + Regularized(Movie) Effects -------------------------------
-model_age_user_reg_movie <- list(
-  name = "Age + User + Regularized(Movie) Effects",
-  train = function(dataset, lambda) {
-    mu <- mean(dataset$rating)
-
-    e_m <- dataset %>%
-      group_by(movieId) %>%
-      summarize(e_m = sum(rating - mu) / (n() + lambda))
-
-    e_u <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      group_by(userId) %>%
-      summarize(e_u = mean(rating - e_m - mu))
-
-    e_a <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      left_join(e_u, by = "userId") %>%
-      group_by(age) %>%
-      summarize(e_a = mean(rating - e_u - e_m - mu))
-
-    predictfn <- function(dataset) {
-      dataset %>%
-        left_join(e_m, by = "movieId") %>%
-        left_join(e_u, by = "userId") %>%
-        left_join(e_a, by = "age") %>%
-        mutate(pred = mu + e_m + e_u + val_or_0(e_a)) %>%
-        pull(pred)
-    }
-    return(list(predict = predictfn))
-  }
-)
+model_age_user_reg_movie <- model_3var_gen(
+  "Age + User + Regularized(Movie) Effects",
+  "movieId", TRUE, "userId", FALSE, "age", FALSE)
 
 ### Regularized(Movie + User + Age) Effects -------------------------------
-model_reg_movie_user_age <- list(
-  name = "Regularized(Movie + User + Age) Effects",
-  train = function(dataset, lambda) {
-    mu <- mean(dataset$rating)
-
-    e_m <- dataset %>%
-      group_by(movieId) %>%
-      summarize(e_m = sum(rating - mu) / (n() + lambda))
-
-    e_u <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      group_by(userId) %>%
-      summarize(e_u = sum(rating - e_m - mu) / (n() + lambda))
-
-    e_a <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      left_join(e_u, by = "userId") %>%
-      group_by(age) %>%
-      summarize(e_a = sum(rating - e_u - e_m - mu) / (n() + lambda))
-
-    predictfn <- function(dataset) {
-      dataset %>%
-        left_join(e_m, by = "movieId") %>%
-        left_join(e_u, by = "userId") %>%
-        left_join(e_a, by = "age") %>%
-        mutate(pred = mu + e_m + e_u + val_or_0(e_a)) %>%
-        pull(pred)
-    }
-    return(list(predict = predictfn))
-  }
-)
+model_reg_movie_user_age <- model_3var_gen(
+  "Regularized(Movie + User + Age) Effects",
+  "movieId", TRUE, "userId", TRUE, "age", TRUE)
 
 ### User + Regularized(Movie + Age) Effects -------------------------------
-model_user_reg_movie_age <- list(
-  name = "User + Regularized(Movie + Age) Effects",
-  train = function(dataset, lambda) {
-    mu <- mean(dataset$rating)
-
-    e_m <- dataset %>%
-      group_by(movieId) %>%
-      summarize(e_m = sum(rating - mu) / (n() + lambda))
-
-    e_u <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      group_by(userId) %>%
-      summarize(e_u = mean(rating - e_m - mu))
-
-    e_a <- dataset %>%
-      left_join(e_m, by = "movieId") %>%
-      left_join(e_u, by = "userId") %>%
-      group_by(age) %>%
-      summarize(e_a = sum(rating - e_u - e_m - mu) / (n() + lambda))
-
-    predictfn <- function(dataset) {
-      dataset %>%
-        left_join(e_m, by = "movieId") %>%
-        left_join(e_u, by = "userId") %>%
-        left_join(e_a, by = "age") %>%
-        mutate(pred = mu + e_m + e_u + val_or_0(e_a)) %>%
-        pull(pred)
-    }
-    return(list(predict = predictfn))
-  }
-)
+model_user_reg_movie_age <- model_3var_gen(
+  "User + Regularized(Movie + Age) Effects",
+  "movieId", TRUE, "userId", FALSE, "age", TRUE)
 
 # Main Program ------------------------------------------------------------
 
@@ -472,6 +373,8 @@ models <- list(model_reg_movie_user,
                model_user_reg_movie,
                model_reg_movie_user_year,
                model_user_reg_movie_year,
+               model_year_reg_movie_user,
+               model_user_year_reg_movie,
                model_age_reg_movie_user,
                model_age_user_reg_movie,
                model_user_reg_movie_age,
