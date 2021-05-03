@@ -430,6 +430,11 @@ log_info(paste("The model with the best fit is", chosen_nongenre_model$name,
 nongenre_predictions <- chosen_nongenre_model$fit$predict(edx)
 val_nongenre_predictions <- chosen_nongenre_model$fit$predict(validation)
 
+nongenre_results <- model_results %>% 
+  arrange(desc(RMSE)) %>%
+  select(-fit)
+saveRDS(nongenre_results, file = "nongenre_results.rds", ascii = TRUE)
+
 remove(model_results, model_index, models)
 
 # Save checkpoint data (don't save logging objects).
@@ -531,6 +536,12 @@ log_info(paste("Best fit for combined models: lambda =",
                genre_tuning$lambda[tuning_index],
                "RMSE =", genre_tuning$rmse[tuning_index]))
 
+combined_results <- tibble(name = paste(last(nongenre_results$name),
+                                        "+ Genre Effects"),
+                           lambda = last(nongenre_results$lambda),
+                           lambda2 = genre_tuning$lambda[tuning_index],
+                           RMSE = genre_tuning$rmse[tuning_index])
+
 remove(edx_residuals)
 
 ## 6. Final Check ------------------------------------------------------------
@@ -549,3 +560,8 @@ validation_predictions <- val_nongenre_predictions +
 
 validation_rmse <- rmse(validation_predictions, validation$rating)
 log_info(paste("Final RMSE is", validation_rmse))
+
+combined_results <- rbind(combined_results,
+                          tibble(name = "", lambda = 0, lambda2 = 0,
+                                 RMSE = validation_rmse))
+saveRDS(combined_results, file = "combined_results.rds", ascii = TRUE)
