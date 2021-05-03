@@ -170,38 +170,39 @@ on the training set.
 
 My exploration was done in two phases. In the first phase, I tested models that
 excluded the genres of the movies. In the second phase, I subtracted the best
-model's predicted values from the actual values, and used the genre variables to
-model the result.
+model's predicted values from the actual values, and used the genres in a
+subsequent model.
 
 ## Models without Genre
 
-The non-genre variables are `userId`, `movieId`, `year`, and `timestamp`.[^1]
-Additionally, I calculated an age variable. The age is a measure of how old the
-movie was when the user rated it. I calculated it as
-`(year(timestamp) + month(timestamp) / 13) - year`. I divided by 13 instead of
-by 12 so that the integral part of the age would equal the year of the rating
-(otherwise, ratings in December would have the integral part equal to the next
-year). I chose the month for the fraction rather than the day or week of the
-year, as it exhibited a smoother rate of change.
+The models without genre that I created were all linear models on some subset of
+the variables `userId`, `movieId`, `year`, and `timestamp`.[^1] I included the
+user and movie variables in all of them. Rather than including the timestamp
+variable directly in a model, I calculated an age variable. The age is an
+approximate measure of how old the movie was when the user rated it. I
+calculated it as `(year(timestamp) + month(timestamp) / 13) - year`. I divided
+by 13 instead of by 12 so that the integral part of the age would equal the year
+of the rating (otherwise, ratings in December would have the integral part equal
+to the next year). I chose the month for the fraction rather than the day or
+week of the year, as it exhibited a smoother rate of change.
 
 [^1]: I left out `title` as I could not think of a useful distance function
     between titles.
 
-Furthermore, I added regularization to the models to reduce the effect of movies
-with few ratings. Using these variables, I tested eight models, grouped in pairs
-that differed only in whether the user effects were regularized:
+Furthermore, I added regularization to different variables in the models. The
+movie variable was always regularized, since there are many movies with 4 or
+fewer ratings.
 
--   Movie and user effects, with either both regularized or only movie effects
-    regularized;
+The result of these decisions was a set of ten models:
 
--   Movie, user, and year effects, with either all three regularized or only
-    movie and year effects regularized;
+-   Two models with movie and user effects: both regularized or only movie
+    effects regularized;
 
--   Movie, user, and age effects, with either movie and user effects regularized
-    or only movie effects regularized;
+-   Four models with movie, user, and year effects: all three regularized and
+    user or year or both effects not regularized;
 
--   Movie, user, and age effects, with either all three regularized or only
-    movie and age effects regularized.
+-   Four models with movie, user, and age effects: all three regularized and
+    user or age or both effects not regularized.
 
 For each model, I calculated an optimal tuning parameter $\lambda$ for the
 regularization and then averaged the results from 5-fold cross validation on the
@@ -211,10 +212,17 @@ entire training set.
 ## Models with Genre
 
 The second phase was to explore the effects of genre after removing the best
-estimate from the first phase. Again, I chose a linear combination of variables
-for the model. As described above, I separated the `genres` variable into 20
-separate variables, one for each of the genres in Table 3. For display purposes,
-I abbreviated each genre to two characters. Each genre variable has a value of 1
+estimate from the first phase. I could have created another model using the
+`genres` variable directly, each combination of genres being a separate
+category. However, this would have been too coarse a granularity. The result
+would have been that a user's rating of a comedy-romance had no relation to a
+user's rating of an adventure-comedy-romance, which we intuitively know is not
+likely.
+
+Therefore, I chose a linear combination of individual genre variables for the
+model. As described above, I separated the `genres` variable into 20 separate
+variables, one for each of the genres in Table 3. For display purposes, I
+abbreviated each genre to two characters. Each genre variable has a value of 1
 if the genre appears in the movie's `genres` variable and has a value of 0
 otherwise.
 
