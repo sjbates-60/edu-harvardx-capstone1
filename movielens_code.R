@@ -137,14 +137,14 @@ model_2var_gen <- function(model_name,
       mu <- mean(dataset$rating)
       
       e1 <- dataset %>%
-        group_by(across(var1)) %>%
+        group_by(across(all_of(var1))) %>%
         summarize(e1 = ifelse(reg1,
                               sum(rating - mu) / (n() + lambda),
                               mean(rating - mu)))
       
       e2 <- dataset %>%
         left_join(e1, by = all_of(var1)) %>%
-        group_by(across(var2)) %>%
+        group_by(across(all_of(var2))) %>%
         summarize(e2 = ifelse(reg2,
                               sum(rating - mu - e1) / (n() + lambda),
                               mean(rating - mu - e1)))
@@ -182,14 +182,14 @@ model_3var_gen <- function(model_name,
       mu <- mean(dataset$rating)
       
       e1 <- dataset %>%
-        group_by(across(var1)) %>%
+        group_by(across(all_of(var1))) %>%
         summarize(e1 = ifelse(reg1,
                               sum(rating - mu) / (n() + lambda),
                               mean(rating - mu)))
       
       e2 <- dataset %>%
         left_join(e1, by = all_of(var1)) %>%
-        group_by(across(var2)) %>%
+        group_by(across(all_of(var2))) %>%
         summarize(e2 = ifelse(reg2,
                               sum(rating - mu - e1) / (n() + lambda),
                               mean(rating - mu - e1)))
@@ -197,7 +197,7 @@ model_3var_gen <- function(model_name,
       e3 <- dataset %>%
         left_join(e1, by = all_of(var1)) %>%
         left_join(e2, by = all_of(var2)) %>%
-        group_by(across(var3)) %>%
+        group_by(across(all_of(var3))) %>%
         summarize(e3 = ifelse(reg3,
                               sum(rating - mu - e1 - e2) / (n() + lambda),
                               mean(rating - mu - e1 - e2)))
