@@ -230,9 +230,9 @@ model_reg_movie_user <- model_2var_gen(
   "Regularized(Movie + User) Effects",
   "movieId", TRUE, "userId", TRUE)
 
-### User + Regularized(Movie) Effects -------------------------------------
+### Regularized(Movie) + User Effects -------------------------------------
 model_user_reg_movie <- model_2var_gen(
-  "User + Regularized(Movie) Effects",
+  "Regularized(Movie) + User Effects",
   "movieId", TRUE, "userId", FALSE)
 
 ### Regularized(Movie + User + Year) Effects ------------------------------
@@ -240,9 +240,9 @@ model_reg_movie_user_year <- model_3var_gen(
   "Regularized(Movie + User + Year) Effects",
   "movieId", TRUE, "userId", TRUE, "year", TRUE)
 
-### User + Regularized(Movie + Year) Effects ------------------------------
+### Regularized(Movie + Year) + User Effects ------------------------------
 model_user_reg_movie_year <- model_3var_gen(
-  "User + Regularized(Movie + Year) Effects",
+  "Regularized(Movie + Year) + User Effects",
   "movieId", TRUE, "userId", FALSE, "year", TRUE)
 
 ### Regularized(Movie + User) + Year Effects ------------------------------
@@ -250,19 +250,19 @@ model_year_reg_movie_user <- model_3var_gen(
   "Regularized(Movie + User) + Year Effects",
   "movieId", TRUE, "userId", TRUE, "year", FALSE)
 
-### User + Regularized(Movie) + Year Effects ------------------------------
+### Regularized(Movie) + User + Year Effects ------------------------------
 model_user_year_reg_movie <- model_3var_gen(
-  "User + Regularized(Movie) + Year Effects",
+  "Regularized(Movie) + User + Year Effects",
   "movieId", TRUE, "userId", FALSE, "year", FALSE)
 
-### Age + Regularized(Movie + User) Effects -------------------------------
+### Regularized(Movie + User) + Age Effects -------------------------------
 model_age_reg_movie_user <- model_3var_gen(
-  "Age + Regularized(Movie + User) Effects",
+  "Regularized(Movie + User) + Age Effects",
   "movieId", TRUE, "userId", TRUE, "age", FALSE)
 
-### Age + User + Regularized(Movie) Effects -------------------------------
+### Regularized(Movie) + User + Age Effects -------------------------------
 model_age_user_reg_movie <- model_3var_gen(
-  "Age + User + Regularized(Movie) Effects",
+  "Regularized(Movie) + User + Age Effects",
   "movieId", TRUE, "userId", FALSE, "age", FALSE)
 
 ### Regularized(Movie + User + Age) Effects -------------------------------
@@ -270,9 +270,9 @@ model_reg_movie_user_age <- model_3var_gen(
   "Regularized(Movie + User + Age) Effects",
   "movieId", TRUE, "userId", TRUE, "age", TRUE)
 
-### User + Regularized(Movie + Age) Effects -------------------------------
+### Regularized(Movie + Age) + User Effects -------------------------------
 model_user_reg_movie_age <- model_3var_gen(
-  "User + Regularized(Movie + Age) Effects",
+  "Regularized(Movie + Age) + User Effects",
   "movieId", TRUE, "userId", FALSE, "age", TRUE)
 
 # Main Program ------------------------------------------------------------
