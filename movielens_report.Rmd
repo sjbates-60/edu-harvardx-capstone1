@@ -28,7 +28,7 @@ combined_results <- readRDS("combined_results.RDS")
 
 In this report, I describe my exploration of a dataset of movie ratings made by
 many people over the course of fourteen years, and my construction of several
-models for predicting ratings for specific movies by specific people.The models
+models for predicting ratings for specific movies by specific people. The models
 were constructed from and tested on a training set containing 90% of the
 ratings. The remaining 10% of the ratings were held out in a validation set,
 which was not used until I had selected a final model among those I constructed.
@@ -179,8 +179,9 @@ approximate measure of how old the movie was when the user rated it. I
 calculated it as `(year(timestamp) + month(timestamp) / 13) - year`. I divided
 by 13 instead of by 12 so that the integral part of the age would equal the year
 of the rating (otherwise, ratings in December would have the integral part equal
-to the next year). I chose the month for the fraction rather than the day or
-week of the year, as it exhibited a smoother rate of change.
+to the next year). Another advantage is that every age is non-zero. I chose the
+month for the fraction rather than the day or week of the year, as it exhibited
+a smoother rate of change.
 
 [^1]: I left out `title` as I could not think of a useful distance function
     between titles.
@@ -211,9 +212,9 @@ The second phase was to explore the effects of genre after removing the best
 estimate from the first phase. I could have created another model using the
 `genres` variable directly, each combination of genres being a separate
 category. However, this would have been too coarse a granularity. The result
-would have been that a user's rating of a comedy-romance had no relation to the
-user's rating of an adventure-comedy-romance, which we intuitively know is not
-likely.
+would have been that, for example, a user's rating of a comedy-romance had no
+relation to the user's rating of an adventure-comedy-romance, which we
+intuitively know is not likely.
 
 Therefore, I chose a linear combination of individual genre variables for the
 model. As described above, I separated the `genres` variable into 20 separate
@@ -262,9 +263,10 @@ genre.
 
 I calculated the terms in two steps:
 
-1.  For each rating in the training set, I gave equal fractions to each of the
-    movie's genres. Thus, if a movie with genres {Ad, Co, Ro} received a rating
-    of 4.5, I assigned a rating of 1.5 to each of the three genres.
+1.  For each residual rating in the training set, I gave equal fractions to each
+    of the movie's genres. Thus, if a movie with genres {Ad, Co, Ro} has a
+    residual rating of 0.3, I assigned a rating of 0.1 to each of the three
+    genres.
 
 2.  For each user, I gathered the fractional ratings calculated in Step 1 and
     computed the average for each genre. For example, if a user rated 3 movies
@@ -296,7 +298,8 @@ matrices:
     $i$ of $M$.
 
 -   The product $U$ $\cdot$ $M^\intercal$ has the average ratings on the
-    diagonal. Multiply by $\lambda_2$ to get the predicted ratings.
+    diagonal. The diagonal entries are then multiplied by $\lambda_2$ to get the
+    predicted ratings.
 
 This is essential for timely calculation of ratings, since R's matrix algebra
 operators are much faster than multiplying two vectors and summing the result. I
@@ -323,12 +326,23 @@ genre_improv <- improv(last(nongenre_results$RMSE),
 
 The models using only non-genre variables all returned very similar results.
 Table 4 shows each model name, the optimal tuning value $\lambda$, and the RMSE
-on the training set, listed in order of descending RMSE. The models that
-included the `year` variable, shown in blue, produced identical results
-regardless of whether the year was regularized. The models that performed best
-included movie, user, and age effects. These still showed at most a
-`r nongenre_improv`% improvement over the model with regularized movie and user
-effects.
+on the training set, listed in order of descending RMSE. The following patterns
+are observed:
+
+-   *Regularizing the `year` variable does not affect accuracy:* The models
+    including the year are shown in blue. The RMSE values are equal for pairs of
+    models where the only difference is whether the year is regularized.
+
+-   *Regularizing any other variable reduces accuracy:* For each pair of models
+    that differ only in whether a variable is regularized, the model with the
+    unregularized variable has a lower RMSE. It is a very small effect, however.
+
+-   *The age of a movie is a better predictor than its release year: Each* model
+    with the `age` variable has a lower RMSE than the corresponding model with
+    the `year` variable.
+
+-   *The best non-genre model is only slightly better than the worst non-genre
+    model:* The improvement is only `r nongenre_improv`%.
 
 ```{r nongenre-model-results}
 year_rows <- which(grepl("Year", nongenre_results$name))
@@ -366,16 +380,3 @@ of individual genres on a user's rating is especially important, as it allows a
 rating to be predicted for a movie whose combination of genres has not been
 previously rated by a user. On the other hand, including the release year or age
 of the movie at rating time had very little effect on accuracy.
-
-One limitation of my analysis was that I used a single tuning parameter to
-regularize all variables in the non-genre models. Using a separate tuning
-parameter for each regularized variable may have improved performance. My code
-optimized the single tuning parameter by checking 33 values in the range [0, 8]
-for each of 5 cross validation folds, and took 20 - 25 minutes per model. Each
-additional tuning parameter would multiply the time by 33, so using two tuning
-parameters would have increased it to between 11 and 14 hours per model, and
-using three would have increased it to between 15 and 19 days per model. I
-looked at the largest and smallest RMSE values found for each fold for one of
-the models with three regularized variables, and discovered that they differed
-by less than .005. I feel confident, therefore, that using multiple tuning
-parameters would not yield any significant improvement.
