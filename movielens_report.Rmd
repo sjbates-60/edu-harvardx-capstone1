@@ -211,7 +211,7 @@ The second phase was to explore the effects of genre after removing the best
 estimate from the first phase. I could have created another model using the
 `genres` variable directly, each combination of genres being a separate
 category. However, this would have been too coarse a granularity. The result
-would have been that a user's rating of a comedy-romance had no relation to a
+would have been that a user's rating of a comedy-romance had no relation to the
 user's rating of an adventure-comedy-romance, which we intuitively know is not
 likely.
 
@@ -323,16 +323,15 @@ genre_improv <- improv(last(nongenre_results$RMSE),
 
 The models using only non-genre variables all returned very similar results.
 Table 4 shows each model name, the optimal tuning value $\lambda$, and the RMSE
-on the training set, listed in order of descending RMSE. Examining the models in
-the pairs described in the methods section above, I found that the model where
-the user effect was not regularized performed slightly better than the modeI
-where the user effect was regularized. (The pairs are indicated by the striping
-in Table 4.) The improvement in each case was very small, however. The models
-that performed best included movie, user, and age effects. These still showed at
-most a `r nongenre_improv`% improvement over the model with only movie and user
+on the training set, listed in order of descending RMSE. The models that
+included the `year` variable, shown in blue, produced identical results
+regardless of whether the year was regularized. The models that performed best
+included movie, user, and age effects. These still showed at most a
+`r nongenre_improv`% improvement over the model with regularized movie and user
 effects.
 
 ```{r nongenre-model-results}
+year_rows <- which(grepl("Year", nongenre_results$name))
 knitr::kable(nongenre_results,
              booktabs = T,
              linesep = "",
@@ -340,8 +339,7 @@ knitr::kable(nongenre_results,
              col.names = c("Model name", "$\\lambda$", "RMSE"),
              escape = FALSE,
              caption = "Results of non-genre models on the training set") %>%
-  kable_styling(latex_options = c("striped"),
-                stripe_index = c(1, 2, 5, 6))
+  row_spec(year_rows, color = "blue")
 ```
 
 Adding the genre effects with $\lambda_2 = 1.8$ to the best non-genre model
@@ -366,7 +364,8 @@ The preceding analysis shows that movie ratings can be reasonably modelled by a
 linear combination of user, movie, and genre variables. Determining the effect
 of individual genres on a user's rating is especially important, as it allows a
 rating to be predicted for a movie whose combination of genres has not been
-previously rated by a user.
+previously rated by a user. On the other hand, including the release year or age
+of the movie at rating time had very little effect on accuracy.
 
 One limitation of my analysis was that I used a single tuning parameter to
 regularize all variables in the non-genre models. Using a separate tuning
