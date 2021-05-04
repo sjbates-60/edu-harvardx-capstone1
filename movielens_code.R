@@ -562,6 +562,8 @@ validation_rmse <- rmse(validation_predictions, validation$rating)
 log_info(paste("Final RMSE is", validation_rmse))
 
 combined_results <- rbind(combined_results,
-                          tibble(name = "", lambda = 0, lambda2 = 0,
+                          tibble(name = "Combined Effects on Validation Set", 
+                                 lambda = first(combined_results$lambda), 
+                                 lambda2 = first(combined_results$lambda2),
                                  RMSE = validation_rmse))
 saveRDS(combined_results, file = "combined_results.rds", ascii = TRUE)
