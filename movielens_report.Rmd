@@ -29,12 +29,15 @@ combined_results <- readRDS("combined_results.RDS")
 
 In this report, I describe my exploration of a dataset of movie ratings made by
 many people over the course of fourteen years, and my construction of several
-models for predicting ratings for specific movies by specific people. The models
-were constructed from and tested on a training set containing 90% of the
-ratings. The remaining 10% of the ratings were held out in a validation set,
-which was not used until I had selected a final model among those I constructed.
-I report how well the final model succeeded in predicting the ratings in the
-validation set.
+linear models for predicting ratings. The ratings were taken from the MovieLens
+website and made available by Grouplens Research.[^1] The models were
+constructed from and tested on a training set containing 90% of the ratings. The
+remaining 10% of the ratings were held out in a validation set, which was not
+used until I had selected a final model among those I constructed. I report how
+well each model performed on the training set, and how well the final model
+succeeded in predicting the ratings in the validation set.
+
+[^1]: https://grouplens.org/datasets/movielens
 
 # Exploration
 
@@ -83,7 +86,7 @@ reviews. Figure 2 shows that there is a negative correlation between a user's
 average rating and the number of movies rated by that user. One can imagine that
 such a user is harder to impress, having seen so many movies.
 
-```{r movie-correlation, fig.height=1.6, fig.cap=movie_caption}
+```{r movie-correlation, fig.height=1.8, fig.cap=movie_caption}
 movie_stats <- ratings %>% group_by(movieId)
 
 mean_movie_ratings <- movie_stats %>%
@@ -103,7 +106,7 @@ mean_movie_ratings %>%
   ylab("Rating")
 ```
 
-```{r user-correlation, fig.height=1.6, fig.cap=user_caption}
+```{r user-correlation, fig.height=1.8, fig.cap=user_caption}
 user_stats <- ratings %>% group_by(userId)
 
 mean_user_ratings <- user_stats %>%
@@ -144,8 +147,8 @@ ratings %>%
 
 ## Data Wrangling
 
-The `movies.dat` table has two variables that were pulled apart in order to
-facilitate analysis.
+The `movies.dat` table has two variables that were transformed in order to be
+used in models.
 
 -   The release year is contained in the `title` variable. This was separated
     into a new `year` variable in order to model the effect of time on ratings.
@@ -157,7 +160,7 @@ facilitate analysis.
     and a 0 otherwise.
 
 The `ratings.dat` table has a `timestamp` variable that is a second count from
-12:00 am on January 1, 1970. I converted it into a `POSIXct` variable so that
+12:00 am on January 1, 1970. It was converted into a `POSIXct` variable so that
 the time between a movie's release year and a rating's creation time can be
 calculated.
 
@@ -173,8 +176,8 @@ subsequent model.
 ## Models without Genre
 
 The models without genre that I created were all linear models on some subset of
-the variables `userId`, `movieId`, `year`, and `timestamp`.[^1] I included the
-user and movie variables in all of them. Rather than including the timestamp
+the variables `userId`, `movieId`, `year`, and `timestamp`.[^2] I included the
+user and movie variables in all of them.[^3] Rather than including the timestamp
 variable directly in a model, I calculated an age variable. The age is an
 approximate measure of how old the movie was when the user rated it. I
 calculated it as `(year(timestamp) + month(timestamp) / 13) - year`. I divided
@@ -184,14 +187,18 @@ to the next year). Another advantage is that every age is non-zero. I chose the
 month for the fraction rather than the day or week of the year, as it exhibited
 a smoother rate of change.
 
-[^1]: I left out `title` as I could not think of a useful distance function
+[^2]: I left out `title` as I could not think of a useful distance function
     between titles.
+
+[^3]: Although the models are not included in the final code, I did create a
+    model and generate an RMSE value for each pair of variables. If only one of
+    the movie and user variables was in the model, the RMSE was at least .94.
 
 Furthermore, I added regularization to different variables in the models. The
 movie variable was always regularized, since there are many movies with 4 or
 fewer ratings.
 
-The result of these decisions was a set of ten models:
+The result of these decisions was a set of eleven models:
 
 -   Two models with movie and user effects: both regularized or only movie
     effects regularized;
@@ -200,7 +207,11 @@ The result of these decisions was a set of ten models:
     user or year or both effects not regularized;
 
 -   Four models with movie, user, and age effects: all three regularized and
-    user or age or both effects not regularized.
+    user or age or both effects not regularized;
+
+-   One model with movie, user, year, and age effects, with only movie effects
+    regularized. This model was added after seeing the results of the previous
+    ten models.
 
 For each model, I calculated an optimal tuning parameter $\lambda$ for the
 regularization and then averaged the results from 5-fold cross validation on the
@@ -212,10 +223,16 @@ entire training set.
 The second phase was to explore the effects of genre after removing the best
 estimate from the first phase. I could have created another model using the
 `genres` variable directly, each combination of genres being a separate
-category. However, this would have been too coarse a granularity. The result
-would have been that, for example, a user's rating of a comedy-romance had no
-relation to the user's rating of an adventure-comedy-romance, which we
-intuitively know is not likely.
+category. There are two problems with this approach:
+
+-   Genre combinations that share genres would be considered entirely
+    separately. For example, a user's rating of a movide with genre
+    "Comedy\|Romance" would have no relation to the user's rating of a movie
+    with genre "Adventure\|Comedy\|Romance," which we intuitively know is not
+    likely.
+
+-   The model would perform no better than a non-genre model for a movie with a
+    genre combination previously unrated by a user.
 
 Therefore, I chose a linear combination of individual genre variables for the
 model. As described above, I separated the `genres` variable into 20 separate
