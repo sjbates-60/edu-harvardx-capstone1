@@ -7,7 +7,7 @@
 #   Logging functions:
 #     Functions for writing results with timestamps to the console and
 #     a log file. Also used to gauge how long various operations take.
-#                     
+#
 #  Utility functions:
 #    Functions to split a dataset into training and test sets, and
 #    to calculate the RMSE of a vector of predictions.
@@ -129,26 +129,26 @@ val_or_0 <- function(x)
 #   reg2       - TRUE if the second variable should be regularized,
 #                FALSE otherwise
 #
-model_2var_gen <- function(model_name, 
+make_2var_model <- function(model_name,
                            var1, reg1, var2, reg2) {
   list(
     name = model_name,
     train = function(dataset, lambda) {
       mu <- mean(dataset$rating)
-      
+
       e1 <- dataset %>%
         group_by(across(all_of(var1))) %>%
         summarize(e1 = ifelse(reg1,
                               sum(rating - mu) / (n() + lambda),
                               mean(rating - mu)))
-      
+
       e2 <- dataset %>%
         left_join(e1, by = all_of(var1)) %>%
         group_by(across(all_of(var2))) %>%
         summarize(e2 = ifelse(reg2,
                               sum(rating - mu - e1) / (n() + lambda),
                               mean(rating - mu - e1)))
-      
+
       predictfn <- function(dataset) {
         dataset %>%
           left_join(e1, by = all_of(var1)) %>%
@@ -174,26 +174,26 @@ model_2var_gen <- function(model_name,
 #   reg3       - TRUE if the third variable should be regularized,
 #                FALSE otherwise
 #
-model_3var_gen <- function(model_name, 
+make_3var_model <- function(model_name,
                            var1, reg1, var2, reg2, var3, reg3) {
   list(
     name = model_name,
     train = function(dataset, lambda) {
       mu <- mean(dataset$rating)
-      
+
       e1 <- dataset %>%
         group_by(across(all_of(var1))) %>%
         summarize(e1 = ifelse(reg1,
                               sum(rating - mu) / (n() + lambda),
                               mean(rating - mu)))
-      
+
       e2 <- dataset %>%
         left_join(e1, by = all_of(var1)) %>%
         group_by(across(all_of(var2))) %>%
         summarize(e2 = ifelse(reg2,
                               sum(rating - mu - e1) / (n() + lambda),
                               mean(rating - mu - e1)))
-      
+
       e3 <- dataset %>%
         left_join(e1, by = all_of(var1)) %>%
         left_join(e2, by = all_of(var2)) %>%
@@ -201,13 +201,81 @@ model_3var_gen <- function(model_name,
         summarize(e3 = ifelse(reg3,
                               sum(rating - mu - e1 - e2) / (n() + lambda),
                               mean(rating - mu - e1 - e2)))
-      
+
       predictfn <- function(dataset) {
         dataset %>%
           left_join(e1, by = all_of(var1)) %>%
           left_join(e2, by = all_of(var2)) %>%
           left_join(e3, by = all_of(var3)) %>%
           mutate(pred = mu + val_or_0(e1) + val_or_0(e2) + val_or_0(e3)) %>%
+          pull(pred)
+      }
+      return(list(predict = predictfn))
+    }
+  )
+}
+
+# Generates a model that is a linear combination of four variables.
+# Parameters:
+#   model_name - the name of the model
+#   var1       - the name of the first variable
+#   reg1       - TRUE if the first variable should be regularized,
+#                FALSE otherwise
+#   var2       - the name of the second variable
+#   reg2       - TRUE if the second variable should be regularized,
+#                FALSE otherwise
+#   var3       - the name of the third variable
+#   reg3       - TRUE if the third variable should be regularized,
+#                FALSE otherwise
+#   var4       - the name of the fourth variable
+#   reg4       - TRUE if the fourth variable should be regularized,
+#                FALSE otherwise
+#
+make_4var_model <- function(model_name,
+                            var1, reg1, var2, reg2, var3, reg3, var4, reg4) {
+  list(
+    name = model_name,
+    train = function(dataset, lambda) {
+      mu <- mean(dataset$rating)
+
+      e1 <- dataset %>%
+        group_by(across(all_of(var1))) %>%
+        summarize(e1 = ifelse(reg1,
+                              sum(rating - mu) / (n() + lambda),
+                              mean(rating - mu)))
+
+      e2 <- dataset %>%
+        left_join(e1, by = all_of(var1)) %>%
+        group_by(across(all_of(var2))) %>%
+        summarize(e2 = ifelse(reg2,
+                              sum(rating - mu - e1) / (n() + lambda),
+                              mean(rating - mu - e1)))
+
+      e3 <- dataset %>%
+        left_join(e1, by = all_of(var1)) %>%
+        left_join(e2, by = all_of(var2)) %>%
+        group_by(across(all_of(var3))) %>%
+        summarize(e3 = ifelse(reg3,
+                              sum(rating - mu - e1 - e2) / (n() + lambda),
+                              mean(rating - mu - e1 - e2)))
+
+      e4 <- dataset %>%
+        left_join(e1, by = all_of(var1)) %>%
+        left_join(e2, by = all_of(var2)) %>%
+        left_join(e3, by = all_of(var3)) %>%
+        group_by(across(all_of(var4))) %>%
+        summarize(e4 = ifelse(reg4,
+                              sum(rating - mu - e1 - e2 - e3) / (n() + lambda),
+                              mean(rating - mu - e1 - e2 - e3)))
+
+      predictfn <- function(dataset) {
+        dataset %>%
+          left_join(e1, by = all_of(var1)) %>%
+          left_join(e2, by = all_of(var2)) %>%
+          left_join(e3, by = all_of(var3)) %>%
+          left_join(e4, by = all_of(var4)) %>%
+          mutate(pred = mu + val_or_0(e1) + val_or_0(e2) + val_or_0(e3) +
+                   val_or_0(e4)) %>%
           pull(pred)
       }
       return(list(predict = predictfn))
@@ -226,54 +294,59 @@ model_3var_gen <- function(model_name,
 #
 
 ### Regularized(Movie + User) Effects -------------------------------------
-model_reg_movie_user <- model_2var_gen(
+model_reg_movie_user <- make_2var_model(
   "Regularized(Movie + User) Effects",
   "movieId", TRUE, "userId", TRUE)
 
 ### Regularized(Movie) + User Effects -------------------------------------
-model_user_reg_movie <- model_2var_gen(
+model_user_reg_movie <- make_2var_model(
   "Regularized(Movie) + User Effects",
   "movieId", TRUE, "userId", FALSE)
 
 ### Regularized(Movie + User + Year) Effects ------------------------------
-model_reg_movie_user_year <- model_3var_gen(
+model_reg_movie_user_year <- make_3var_model(
   "Regularized(Movie + User + Year) Effects",
   "movieId", TRUE, "userId", TRUE, "year", TRUE)
 
 ### Regularized(Movie + Year) + User Effects ------------------------------
-model_user_reg_movie_year <- model_3var_gen(
+model_user_reg_movie_year <- make_3var_model(
   "Regularized(Movie + Year) + User Effects",
   "movieId", TRUE, "userId", FALSE, "year", TRUE)
 
 ### Regularized(Movie + User) + Year Effects ------------------------------
-model_year_reg_movie_user <- model_3var_gen(
+model_year_reg_movie_user <- make_3var_model(
   "Regularized(Movie + User) + Year Effects",
   "movieId", TRUE, "userId", TRUE, "year", FALSE)
 
 ### Regularized(Movie) + User + Year Effects ------------------------------
-model_user_year_reg_movie <- model_3var_gen(
+model_user_year_reg_movie <- make_3var_model(
   "Regularized(Movie) + User + Year Effects",
   "movieId", TRUE, "userId", FALSE, "year", FALSE)
 
 ### Regularized(Movie + User) + Age Effects -------------------------------
-model_age_reg_movie_user <- model_3var_gen(
+model_age_reg_movie_user <- make_3var_model(
   "Regularized(Movie + User) + Age Effects",
   "movieId", TRUE, "userId", TRUE, "age", FALSE)
 
 ### Regularized(Movie) + User + Age Effects -------------------------------
-model_age_user_reg_movie <- model_3var_gen(
+model_age_user_reg_movie <- make_3var_model(
   "Regularized(Movie) + User + Age Effects",
   "movieId", TRUE, "userId", FALSE, "age", FALSE)
 
 ### Regularized(Movie + User + Age) Effects -------------------------------
-model_reg_movie_user_age <- model_3var_gen(
+model_reg_movie_user_age <- make_3var_model(
   "Regularized(Movie + User + Age) Effects",
   "movieId", TRUE, "userId", TRUE, "age", TRUE)
 
 ### Regularized(Movie + Age) + User Effects -------------------------------
-model_user_reg_movie_age <- model_3var_gen(
+model_user_reg_movie_age <- make_3var_model(
   "Regularized(Movie + Age) + User Effects",
   "movieId", TRUE, "userId", FALSE, "age", TRUE)
+
+### Regularized(Movie) + User + Year + Age Effects ------------------------
+model_user_year_age_reg_movie <- make_4var_model(
+  "Regularized(Movie) + User + Year + Age Effects",
+  "movieId", TRUE, "userId", FALSE, "year", FALSE, "age", TRUE)
 
 # Main Program ------------------------------------------------------------
 
@@ -378,7 +451,8 @@ models <- list(model_reg_movie_user,
                model_age_reg_movie_user,
                model_age_user_reg_movie,
                model_user_reg_movie_age,
-               model_reg_movie_user_age)
+               model_reg_movie_user_age,
+               model_user_year_age_reg_movie)
 
 # For each model:
 model_results <- map_dfr(models, function(model) {
@@ -430,7 +504,7 @@ log_info(paste("The model with the best fit is", chosen_nongenre_model$name,
 nongenre_predictions <- chosen_nongenre_model$fit$predict(edx)
 val_nongenre_predictions <- chosen_nongenre_model$fit$predict(validation)
 
-nongenre_results <- model_results %>% 
+nongenre_results <- model_results %>%
   arrange(desc(RMSE)) %>%
   select(-fit)
 saveRDS(nongenre_results, file = "nongenre_results.rds", ascii = TRUE)
@@ -562,8 +636,8 @@ validation_rmse <- rmse(validation_predictions, validation$rating)
 log_info(paste("Final RMSE is", validation_rmse))
 
 combined_results <- rbind(combined_results,
-                          tibble(name = "Combined Effects on Validation Set", 
-                                 lambda = first(combined_results$lambda), 
+                          tibble(name = "Combined Effects on Validation Set",
+                                 lambda = first(combined_results$lambda),
                                  lambda2 = first(combined_results$lambda2),
                                  RMSE = validation_rmse))
 saveRDS(combined_results, file = "combined_results.rds", ascii = TRUE)
