@@ -37,7 +37,7 @@ used until I had selected a final model among those I constructed. I report how
 well each model performed on the training set, and how well the final model
 succeeded in predicting the ratings in the validation set.
 
-[^1]: https://grouplens.org/datasets/movielens
+[^1]: <https://grouplens.org/datasets/movielens>
 
 # Exploration
 
@@ -335,25 +335,21 @@ improv <- function(rmse1, rmse2, sig) {
 
 nongenre_improv <- improv(first(nongenre_results$RMSE),
                           last(nongenre_results$RMSE),
-                          1)
+                          2)
 genre_improv <- improv(last(nongenre_results$RMSE),
                        first(combined_results$RMSE),
-                       1)
+                       2)
 
 ```
 
 The models using only non-genre variables all returned very similar results.
 Table 4 shows each model name, the optimal tuning value $\lambda$, and the RMSE
-on the training set, listed in order of descending RMSE. The following patterns
+on the training set, with the lowest RMSE shown in bold. The following patterns
 are observed:
 
--   *Regularizing the `year` variable does not affect accuracy:* The models
-    including the year are shown in blue. The RMSE values are equal for pairs of
-    models where the only difference is whether the year is regularized.
-
--   *Regularizing any other variable reduces accuracy:* For each pair of models
-    that differ only in whether a variable is regularized, the model with the
-    unregularized variable has a lower RMSE. It is a very small effect, however.
+-   *Regularizing the user variable reduces accuracy:* For each pair of models
+    that differ only in whether the `user` variable is regularized (indicated by
+    stripes), the model with the unregularized variable has a lower RMSE.
 
 -   *The age of a movie is a better predictor than its release year: Each* model
     with the `age` variable has a lower RMSE than the corresponding model with
@@ -363,15 +359,17 @@ are observed:
     model:* The improvement is only `r nongenre_improv`%.
 
 ```{r nongenre-model-results}
-year_rows <- which(grepl("Year", nongenre_results$name))
-knitr::kable(nongenre_results,
+pair_order <- c(1, 4, 2, 7, 3, 8, 5, 9, 6, 10, 11)
+knitr::kable(nongenre_results[pair_order, ],
              booktabs = T,
              linesep = "",
-             digits = 6,
+             digits = 5,
              col.names = c("Model name", "$\\lambda$", "RMSE"),
              escape = FALSE,
              caption = "Results of non-genre models on the training set") %>%
-  row_spec(year_rows, color = "blue")
+  row_spec(11, bold = TRUE) %>%
+  kable_styling(latex_options = "striped", stripe_index = c(3:4, 7:8))
+
 ```
 
 Adding the genre effects with $\lambda_2 = 1.8$ to the best non-genre model
@@ -382,7 +380,7 @@ models and running them on the validation set yielded an RMSE value of
 
 ```{r genre-model-results}
 knitr::kable(combined_results[1, ],
-             digits = 6,
+             digits = 5,
              booktabs = T,
              escape = FALSE,
              col.names = c("Model name", "$\\lambda$", "$\\lambda_2$", 
