@@ -356,6 +356,11 @@ log_start()
 
 log_info("Loading data...")
 
+download.file("https://files.grouplens.org/datasets/movielens/ml-10m.zip",
+              destfile = "ml-10m.zip")
+unzip("ml-10m.zip", files = c("ml-10M100K/ratings.dat", 
+                              "ml-10M100K/movies.dat"))
+file.remove("ml-10m.zip")
 records <- readLines("ml-10M100K/ratings.dat")
 ratings <- str_split_fixed(records, "\\::", 4)
 colnames(ratings) <- c("userId", "movieId", "rating", "timestamp")
