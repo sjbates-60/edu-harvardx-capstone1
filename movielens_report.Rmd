@@ -18,9 +18,9 @@ require(tidyverse)
 require(lubridate)
 require(kableExtra)
 
-# The following file contains the ratings and movies tables.
-load("ml-10M100K/movielens_report.RData")
-
+# The following files were created by movielens_code.R
+ratings <- readRDS("ratings.rds")
+movies <- readRDS("movies.rds")
 nongenre_results <- readRDS("nongenre_results.rds")
 combined_results <- readRDS("combined_results.RDS")
 ```
