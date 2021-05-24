@@ -31,9 +31,8 @@
 #     re-run without starting over from scratch.
 #   - It periodically removes large objects so that the analysis does
 #     not fail due to running out of memory.
-#   - The code was executed on a Windows 7 PC with 6 GB of RAM.
-#     Memory issues were frequent, since the training set required
-#     1.6 GB of RAM.
+#   - It creates four files used by the R markdown report, so it should 
+#     be run first.
 #
 require(tidyverse)
 require(caret)
@@ -51,6 +50,8 @@ z__logger <- NULL
 # both the console and a log file.
 #
 log_start <- function() {
+  if (!dir.exists("logs"))
+    dir.create("logs")
   filename <- format(Sys.time(), "logs/%Y%m%d_%H%M%S.txt")
   console_appender <- console_appender(layout = default_log_layout())
   file_appender <- file_appender(filename, append = TRUE,
@@ -371,6 +372,7 @@ ratings <- as.data.table(ratings) %>%
          timestamp = as.POSIXct(as.numeric(timestamp),
                                 tz = "UTC",
                                 origin = "1970-01-01 00:00.00 UTC"))
+saveRDS(ratings, file = "ratings.rds", ascii = TRUE)
 remove(records)
 
 log_info("Ratings data loaded.")
@@ -401,6 +403,7 @@ movies <- str_split_fixed(readLines("ml-10M100K/movies.dat"), "\\::", 3)
 colnames(movies) <- c("movieId", "title", "genres")
 movies <- as.data.table(movies) %>%
   mutate(movieId = as.numeric(movieId))
+saveRDS(movies, file = "movies.rds", ascii = TRUE)
 
 # For display purposes, shorten the name of each genre to two characters.
 movies <- movies %>%
