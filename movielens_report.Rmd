@@ -78,13 +78,14 @@ knitr::kable(t(high_percents), booktabs = T,
 rm(percents, high_percents)
 ```
 
-I present three plots to motivate the use of the different variables in
-modelling ratings. Figure 1 shows that there is a positive correlation between a
-movie's average rating and the number of times it was rated. This makes
-intuitive sense; more people will tend to go to movies that they hear have good
-reviews. Figure 2 shows that there is a negative correlation between a user's
-average rating and the number of movies rated by that user. One can imagine that
-such a user is harder to impress, having seen so many movies.
+It is intuitively obvious that a movie's rating depends on the particular movie
+being rated and the particular user rating it. This intuition is reflected in
+the data. Figure 1 shows that there is a positive correlation between a movie's
+average rating and the number of times it was rated. A reasonable explanation is
+that more people will see more popular movies. Figure 2 shows that there is a
+negative correlation between a user's average rating and the number of movies
+rated by that user. One can imagine that such a user is harder to impress,
+having seen so many movies.
 
 ```{r movie-correlation, fig.height=1.8, fig.cap=movie_caption}
 movie_stats <- ratings %>% group_by(movieId)
@@ -143,6 +144,8 @@ ratings %>%
   labs(title = "Jerry Maguire")
 ```
 
+\newpage
+
 # Methods and Analysis
 
 ## Data Wrangling
@@ -187,8 +190,8 @@ to the next year). Another advantage is that every age is non-zero. I chose the
 month for the fraction rather than the day or week of the year, as it exhibited
 a smoother rate of change.
 
-[^2]: I left out `title` as I could not think of a useful distance function
-    between titles.
+[^2]: I left out `title` as I could not think of a useful way to convert a title
+    into a number that would make up part of a rating.
 
 [^3]: Although the models are not included in the final code, I did create a
     model and generate an RMSE value for each pair of variables. If only one of
@@ -201,18 +204,21 @@ fewer ratings.
 The result of these decisions was a set of eleven models:
 
 -   Two models with movie and user effects: both regularized or only movie
-    effects regularized;
+    effects regularized ($\hat{Y} = \mu + e_m + e_u$);
 
 -   Four models with movie, user, and year effects: all three regularized and
-    user or year or both effects not regularized;
+    user or year or both effects not regularized
+    ($\hat{Y} = \mu + e_m + e_u + e_y$);
 
 -   Four models with movie, user, and age effects: all three regularized and
-    user or age or both effects not regularized;
+    user or age or both effects not regularized
+    ($\hat{Y} = \mu + e_m + e_u + e_a$);
 
 -   One model with movie, user, year, and age effects, with only movie effects
-    regularized. This model was added after seeing the results of the previous
-    ten models.
+    regularized ($\hat{Y} = \mu + e_m + e_u + e_y + e_a$). This model was added
+    after seeing the results of the previous ten models.
 
+Here, the constant $\mu$ is the average rating over all movies and all users.
 For each model, I calculated an optimal tuning parameter $\lambda$ for the
 regularization and then averaged the results from 5-fold cross validation on the
 training set. I then chose the model that resulted in the lowest RMSE on the
@@ -271,7 +277,7 @@ knitr::kable(summary,
 Mathematically, the model can be written as
 
 $$
-\hat{Y}_{m,u} = \sum_{g = 1}^{20}x_m^g e_g^u
+\hat{Y} = \sum_{g = 1}^{20}x_m^g e_g^u
 $$
 
 where $m$ is a movie, $u$ is a user, and $x_m^g$ is the genre variable described
@@ -296,12 +302,12 @@ The result is a matrix with 69,878 rows and 20 columns: 1 row for each user and
 1 column for each genre. The rating for a movie is then computed by summing the
 values in a row that correspond to the movie's genres. When I tested this, the
 simple sum gave lower ratings than the actual ratings, so I introduced a tuning
-factor $\lambda_2$. I then calculated the RMSE for
-$\lambda_2 \cdot \hat{Y}_{m,u}$ for values of $\lambda_2$ in a range, and chose
-the value of $\lambda_2$ that produced the lowest RMSE on the training set.
+factor $\lambda_2$. I then calculated the RMSE for $\lambda_2 \cdot \hat{Y}$ for
+values of $\lambda_2$ in a range, and chose the value of $\lambda_2$ that
+produced the lowest RMSE on the training set.
 
-To compute $\hat{Y}_{m,u}$ efficiently, I noted that the sum above can be
-rewritten as the dot product of the vectors $(x_m^1, \ldots , x_m^{20})$ and
+To compute $\hat{Y}$ efficiently, I noted that the sum above can be rewritten as
+the dot product of the vectors $(x_m^1, \ldots , x_m^{20})$ and
 $(e_1^u , \ldots , e_{20}^u )$. The first vector is the genre categorization of
 movie $m$ and the second vector is the row of the above matrix for user $u$.
 Therefore, multiple ratings can be calculated by computing the product of two
@@ -390,9 +396,10 @@ knitr::kable(combined_results[1, ],
 
 # Conclusion
 
-The preceding analysis shows that movie ratings can be reasonably modelled by a
-linear combination of user, movie, and genre variables. Determining the effect
-of individual genres on a user's rating is especially important, as it allows a
-rating to be predicted for a movie whose combination of genres has not been
-previously rated by a user. On the other hand, including the release year or age
-of the movie at rating time had very little effect on accuracy.
+The preceding analysis shows that the most significant variables for a linear
+model of movie ratings are the user, movie, and genre variables. Including the
+release year or age of the movie at rating time had a much smaller effect on
+accuracy. Furthermore, determining the effect of individual genres on a user's
+rating allows a rating to be predicted for a movie whose combination of genres
+has not been previously rated by a user. This is especially important for a
+model that will be used as the basis for a recommendation system.
