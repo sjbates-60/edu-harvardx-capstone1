@@ -31,7 +31,7 @@
 #     re-run without starting over from scratch.
 #   - It periodically removes large objects so that the analysis does
 #     not fail due to running out of memory.
-#   - It creates four files used by the R markdown report, so it should 
+#   - It creates four files used by the R markdown report, so it should
 #     be run first.
 #
 require(tidyverse)
@@ -359,7 +359,7 @@ log_info("Loading data...")
 
 download.file("https://files.grouplens.org/datasets/movielens/ml-10m.zip",
               destfile = "ml-10m.zip")
-unzip("ml-10m.zip", files = c("ml-10M100K/ratings.dat", 
+unzip("ml-10m.zip", files = c("ml-10M100K/ratings.dat",
                               "ml-10M100K/movies.dat"))
 file.remove("ml-10m.zip")
 records <- readLines("ml-10M100K/ratings.dat")
