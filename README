@@ -1,16 +1,12 @@
 This repository contains the MovieLens project for the HarvardX PH125.9x: Data
-Science: Capstone course. The significant files are:
+Science: Capstone course, Spring 2021. The significant files are:
 - movielens_code.R, which analyzes several models on the provided dataset;
 - movielens_report.Rmd, which contains the report of the analysis;
 - movielens_report.pdf, which is the PDF output from movielens_report.Rmd.
 
-The Rmd file additionally uses two files created by the analysis:
+The Rmd file additionally uses four files created by the analysis:
+- ratings.rds, which contains the ratings table;
+- movies.rds, which contains the movies table;
 - nongenre_results.rds, which contains a table of results for non-genre models;
 - combined_results.rds, which contains a table of results for the combined
   non-genre and genre models.
-
-Not included due to their size are three files in the subdirectory ml-10M100K:
-- movies.dat, which contains the movies table;
-- ratings.dat, which contains the ratings table;
-- movielens_report.RData, which contains the movies and ratings tables as R 
-  objects.
